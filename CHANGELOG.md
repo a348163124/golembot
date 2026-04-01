@@ -1,3 +1,10 @@
+## [0.43.1](https://github.com/0xranx/golembot/compare/v0.43.0...v0.43.1) (2026-04-01)
+
+
+### Bug Fixes
+
+* surface streaming timeout interruptions ([1c62919](https://github.com/0xranx/golembot/commit/1c629194332d220732e689872a9138c43d5ca1a7))
+
 # [0.43.0](https://github.com/0xranx/golembot/compare/v0.42.0...v0.43.0) (2026-03-29)
 
 
