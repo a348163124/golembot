@@ -73,6 +73,19 @@ function summarizeToolCall(name: string, args: string, maxLen = 72): string {
   return `🔧 ${label} ${preview}`;
 }
 
+function buildErrorNotice(errorMessage: string, timeoutSeconds: number): { reply: string; status: string } {
+  if (/timed out/i.test(errorMessage)) {
+    return {
+      reply: `Task timed out after ${timeoutSeconds}s. The partial reply above may be incomplete.`,
+      status: `⚠️ Timed out (${timeoutSeconds}s)`,
+    };
+  }
+  return {
+    reply: 'The reply was interrupted before completion. The partial reply above may be incomplete.',
+    status: '⚠️ Interrupted',
+  };
+}
+
 interface GatewayOpts {
   dir?: string;
   port?: number;
@@ -554,6 +567,8 @@ export async function handleMessage(
   try {
     let fullReply = '';
     let hasError = false;
+    let lastErrorMessage = '';
+    const timeoutSeconds = config.timeout ?? 300;
     // When injectPass is active (smart mode, not mentioned), force buffered behavior
     // to prevent [PASS] sentinel from leaking to IM before we can detect and suppress it.
     const effectiveMode = injectPass ? 'buffered' : streamingConfig.mode;
@@ -609,6 +624,7 @@ export async function handleMessage(
           log(verbose, `[${channelType}] warning: ${event.message}`);
         } else if (event.type === 'error') {
           hasError = true;
+          lastErrorMessage = event.message;
           console.error(`[${channelType}] Engine error: ${event.message}`);
         } else if (event.type === 'done') {
           costUsd = event.costUsd;
@@ -635,8 +651,17 @@ export async function handleMessage(
         fullReply = 'Sorry, an error occurred while processing your message. Please try again later.';
       }
 
+      let finalStatusText: string | undefined;
+      if (trimmed && hasError) {
+        const notice = buildErrorNotice(lastErrorMessage, timeoutSeconds);
+        await sendChunk(notice.reply);
+        finalStatusText = notice.status;
+      } else if (hasError) {
+        finalStatusText = '⚠️ Failed';
+      }
+
       if (fullReply.trim()) {
-        await finalizeStatusUpdate();
+        await finalizeStatusUpdate(finalStatusText ?? '✅ Done');
         log(verbose, `[${channelType}] replied to ${senderLabel}: "${fullReply.trim().slice(0, 80)}..." (streaming)`);
         trackMetrics({ responsePreview: fullReply.trim().slice(0, 120) });
       }
@@ -649,6 +674,7 @@ export async function handleMessage(
           log(verbose, `[${channelType}] warning: ${event.message}`);
         } else if (event.type === 'error') {
           hasError = true;
+          lastErrorMessage = event.message;
           console.error(`[${channelType}] Engine error: ${event.message}`);
         } else if (event.type === 'done') {
           costUsd = event.costUsd;
@@ -670,7 +696,18 @@ export async function handleMessage(
 
       if (fullReply.trim()) {
         await sendChunk(fullReply);
-        await finalizeStatusUpdate();
+        let finalStatusText: string | undefined;
+        if (
+          hasError &&
+          fullReply !== 'Sorry, an error occurred while processing your message. Please try again later.'
+        ) {
+          const notice = buildErrorNotice(lastErrorMessage, timeoutSeconds);
+          await sendChunk(notice.reply);
+          finalStatusText = notice.status;
+        } else if (hasError) {
+          finalStatusText = '⚠️ Failed';
+        }
+        await finalizeStatusUpdate(finalStatusText ?? '✅ Done');
         log(verbose, `[${channelType}] replied to ${senderLabel}: "${fullReply.trim().slice(0, 80)}..."`);
         trackMetrics({ responsePreview: fullReply.trim().slice(0, 120) });
       }

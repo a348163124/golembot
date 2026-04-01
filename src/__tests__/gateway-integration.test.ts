@@ -1345,6 +1345,23 @@ describe('handleMessage — full gateway pipeline', () => {
       expect(adapter.replies.some((r) => r.text.includes('error occurred'))).toBe(true);
     });
 
+    it('streaming mode sends an interruption notice after a partial timeout', async () => {
+      const assistant = makeStreamingAssistant([
+        { type: 'text', content: 'Part 1.\n\n' },
+        { type: 'error', message: 'Agent invocation timed out' },
+      ]);
+      const adapter = makeMockAdapter();
+      const msg = makeDmMsg();
+      const config = makeConfig({ timeout: 120, streaming: { mode: 'streaming' } } as any);
+
+      await handleMessage(msg, config, assistant, adapter, 'slack', false, dir);
+
+      expect(adapter.replies.map((r) => r.text)).toEqual([
+        'Part 1.',
+        'Task timed out after 120s. The partial reply above may be incomplete.',
+      ]);
+    });
+
     it('sends a thinking status before a delayed first reply', async () => {
       vi.useFakeTimers();
       try {
