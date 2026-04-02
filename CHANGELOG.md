@@ -1,3 +1,10 @@
+# [0.44.0](https://github.com/0xranx/golembot/compare/v0.43.1...v0.44.0) (2026-04-02)
+
+
+### Features
+
+* add stop support for active tasks ([43519ac](https://github.com/0xranx/golembot/commit/43519ac9b5a1dee3fee82e6216d63ce07764b751))
+
 ## [0.43.1](https://github.com/0xranx/golembot/compare/v0.43.0...v0.43.1) (2026-04-01)
 
 
