@@ -94,6 +94,8 @@ golembot fleet ls     # list all running bots
 golembot skill search "data analysis"  # browse 13,000+ ClawHub skills
 ```
 
+Long task still running? Use `/stop` in REPL or IM, `assistant.cancel(sessionKey?)` in code, or `POST /abort` over HTTP to cancel the current task without clearing session history.
+
 ### Dashboard & Fleet
 
 Every `golembot gateway` instance comes with a built-in web Dashboard showing real-time metrics, channel status, and a quick-test console:

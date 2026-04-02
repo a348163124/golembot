@@ -494,6 +494,34 @@ describe('createAssistant', () => {
 
       expect(events.some((e) => e.type === 'error' && e.message.includes('timed out'))).toBe(true);
     }, 5000);
+
+    it('cancel() aborts the active invocation for a session', async () => {
+      mockedCreateEngine.mockReturnValue({
+        async *invoke(_p: string, opts: InvokeOpts): AsyncIterable<StreamEvent> {
+          await new Promise<void>((resolve) => {
+            if (opts.signal?.aborted) return resolve();
+            opts.signal?.addEventListener('abort', () => resolve(), { once: true });
+          });
+          yield {
+            type: 'error',
+            message: opts.signal?.reason === 'user' ? 'Agent invocation stopped by user' : 'Agent invocation timed out',
+          };
+        },
+      });
+
+      const assistant = createAssistant({ dir, timeoutMs: 5000 });
+      const events: StreamEvent[] = [];
+      const run = (async () => {
+        for await (const evt of assistant.chat('cancel me', { sessionKey: 'cancel-key' })) events.push(evt);
+      })();
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(await assistant.cancel('cancel-key')).toBe(true);
+      await run;
+
+      expect(events.some((e) => e.type === 'error' && e.message.includes('stopped by user'))).toBe(true);
+      expect(await assistant.cancel('cancel-key')).toBe(false);
+    }, 5000);
   });
 
   // ── conversation history ───────────────────────────

@@ -94,6 +94,8 @@ golembot fleet ls     # 列出所有运行中的 bot
 golembot skill search "数据分析"  # 浏览 13,000+ ClawHub 社区技能
 ```
 
+长任务还在跑？可以在 REPL 或 IM 里用 `/stop`，在代码里调用 `assistant.cancel(sessionKey?)`，或者通过 HTTP `POST /abort` 中断当前任务，而不清空会话历史。
+
 ### Dashboard 与 Fleet 总看板
 
 每个 `golembot gateway` 实例都自带 Web Dashboard，展示实时指标、通道状态和快速测试控制台：

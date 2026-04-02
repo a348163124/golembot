@@ -69,7 +69,7 @@ curl -X POST http://localhost:3000/chat \
 }
 ```
 
-可用斜杠命令：`/help`、`/status`、`/engine [name]`、`/model [list|name]`、`/skill`、`/cron`、`/reset`。
+可用斜杠命令：`/help`、`/status`、`/engine [name]`、`/model [list|name]`、`/skill`、`/cron`、`/reset`、`/stop`。
 
 **定时任务管理：** `/cron` 命令同样可以通过 `POST /chat` 使用：
 
@@ -102,6 +102,30 @@ data: {"type":"error","message":"Agent invocation timed out"}
 ### `POST /reset`
 
 清除会话。请求体：`{ "sessionKey": "user-123" }`。响应：`{ "ok": true }`。
+
+### `POST /abort`
+
+中断某个会话当前正在运行的任务，但不清空会话历史。
+
+请求体：
+
+```json
+{ "sessionKey": "user-123" }
+```
+
+`sessionKey` 可省略；省略时会中断默认会话。
+
+响应：
+
+```json
+{ "ok": true, "aborted": true }
+```
+
+如果当前没有正在运行的任务，则返回：
+
+```json
+{ "ok": true, "aborted": false }
+```
 
 ### `GET /health`
 

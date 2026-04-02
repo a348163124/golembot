@@ -403,11 +403,13 @@ type MockAssistant = {
     engine: string;
     model: string | undefined;
   }>;
+  cancel(sessionKey?: string): Promise<boolean>;
   resetSession(sessionKey?: string): Promise<void>;
   listModels(): Promise<string[]>;
   callCount: number;
   lastSessionKey: string | undefined;
   lastPrompt: string | undefined;
+  canceledSessionKey?: string;
 };
 
 /** Stubs for the new Assistant methods (shared by all mock factories). */
@@ -416,6 +418,9 @@ const mockAssistantStubs = {
   setModel(_m: string) {},
   async getStatus() {
     return { config: { name: 'test', engine: 'mock' } as any, skills: [] as never[], engine: 'mock', model: undefined };
+  },
+  async cancel(_k?: string) {
+    return true;
   },
   async resetSession(_k?: string) {},
   async listModels() {
@@ -429,6 +434,7 @@ function makeMockAssistant(replyText: string): MockAssistant {
     callCount: 0,
     lastSessionKey: undefined,
     lastPrompt: undefined,
+    canceledSessionKey: undefined,
     async *chat(message: string, opts: { sessionKey?: string } = {}) {
       obj.callCount++;
       obj.lastPrompt = message;
@@ -446,6 +452,7 @@ function makeThrowingAssistant(): MockAssistant {
     callCount: 0,
     lastSessionKey: undefined,
     lastPrompt: undefined,
+    canceledSessionKey: undefined,
     async *chat(message: string, opts: { sessionKey?: string } = {}) {
       obj.callCount++;
       obj.lastPrompt = message;
@@ -464,6 +471,7 @@ function makeErrorEventAssistant(): MockAssistant {
     callCount: 0,
     lastSessionKey: undefined,
     lastPrompt: undefined,
+    canceledSessionKey: undefined,
     async *chat(message: string, opts: { sessionKey?: string } = {}) {
       obj.callCount++;
       obj.lastPrompt = message;
@@ -1362,6 +1370,23 @@ describe('handleMessage — full gateway pipeline', () => {
       ]);
     });
 
+    it('streaming mode sends a stopped notice after a partial user abort', async () => {
+      const assistant = makeStreamingAssistant([
+        { type: 'text', content: 'Part 1.\n\n' },
+        { type: 'error', message: 'Agent invocation stopped by user' },
+      ]);
+      const adapter = makeMockAdapter();
+      const msg = makeDmMsg();
+      const config = makeConfig({ streaming: { mode: 'streaming' } } as any);
+
+      await handleMessage(msg, config, assistant, adapter, 'slack', false, dir);
+
+      expect(adapter.replies.map((r) => r.text)).toEqual([
+        'Part 1.',
+        'The task was stopped before completion. The partial reply above may be incomplete.',
+      ]);
+    });
+
     it('sends a thinking status before a delayed first reply', async () => {
       vi.useFakeTimers();
       try {
@@ -1445,6 +1470,20 @@ describe('handleMessage — full gateway pipeline', () => {
       expect(adapter.replies[0].text).toContain('Session reset');
     });
 
+    it('/stop cancels the current DM task without calling agent chat', async () => {
+      const assistant = makeMockAssistant('should not be called');
+      assistant.cancel = async (sessionKey?: string) => {
+        assistant.canceledSessionKey = sessionKey;
+        return true;
+      };
+      const adapter = makeMockAdapter();
+      const msg = makeDmMsg({ text: '/stop' });
+      await handleMessage(msg, makeConfig(), assistant, adapter, 'slack', false, dir);
+      expect(assistant.callCount).toBe(0);
+      expect(assistant.canceledSessionKey).toBe('slack:C001:U001');
+      expect(adapter.replies[0].text).toContain('Stopped the current task');
+    });
+
     it('/engine shows current engine', async () => {
       const assistant = makeMockAssistant('x');
       const adapter = makeMockAdapter();
@@ -1480,6 +1519,21 @@ describe('handleMessage — full gateway pipeline', () => {
       expect(assistant.callCount).toBe(0);
       expect(adapter.replies.length).toBe(1);
       expect(adapter.replies[0].text).toContain('/help');
+    });
+
+    it('/stop works in group chats without requiring @mention', async () => {
+      const assistant = makeMockAssistant('should not be called');
+      assistant.cancel = async (sessionKey?: string) => {
+        assistant.canceledSessionKey = sessionKey;
+        return true;
+      };
+      const adapter = makeMockAdapter();
+      const msg = makeGroupMsg({ text: '/stop' });
+      const config = makeConfig({ groupChat: { groupPolicy: 'mention-only' } } as any);
+      await handleMessage(msg, config, assistant, adapter, 'slack', false, dir);
+      expect(assistant.callCount).toBe(0);
+      expect(assistant.canceledSessionKey).toBe('slack:C123');
+      expect(adapter.replies[0].text).toContain('Stopped the current task');
     });
 
     it('/help output includes /cron command', async () => {

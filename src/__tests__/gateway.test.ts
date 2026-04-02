@@ -451,6 +451,9 @@ describe('Slack thread conversation keys', () => {
       async getStatus() {
         return { engine: 'cursor', model: undefined, skills: [] };
       },
+      async cancel() {
+        return false;
+      },
       async resetSession() {},
       async listModels() {
         return [];
@@ -507,6 +510,9 @@ describe('Slack thread conversation keys', () => {
       async setModel() {},
       async getStatus() {
         return { engine: 'cursor', model: undefined, skills: [] };
+      },
+      async cancel() {
+        return false;
       },
       async resetSession(sessionKey?: string) {
         resetKeys.push(sessionKey);

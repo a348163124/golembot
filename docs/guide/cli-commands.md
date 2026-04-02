@@ -40,6 +40,7 @@ golembot run [-d <dir>] [--api-key <key>]
 | `/engine [name]` | Show or switch engine |
 | `/model [list\|name]` | Show, list available, or switch model |
 | `/skill` | List installed skills |
+| `/stop` | Stop the current running task |
 | `/cron list` | List all scheduled tasks and their status |
 | `/cron run <id>` | Trigger a scheduled task immediately |
 | `/cron enable <id>` | Enable a scheduled task |
@@ -50,6 +51,8 @@ golembot run [-d <dir>] [--api-key <key>]
 | `/quit`, `/exit` | Exit the REPL |
 
 These slash commands also work in IM channels (Feishu, Telegram, Slack, etc.) and via the HTTP API (`POST /chat` with a slash command as the message returns a JSON response instead of an SSE stream).
+
+`/stop` cancels the current in-flight task for the session without clearing history. Use `/reset` if you want to clear the session itself.
 
 Supports multi-line input with `"""` delimiters. Displays duration and cost (when available) on completion.
 
@@ -69,7 +72,7 @@ golembot serve [-d <dir>] [-p <port>] [-t <token>] [--host <host>] [--api-key <k
 | `--host <host>` | Bind address | `127.0.0.1` |
 | `--api-key <key>` | Agent API key | From env |
 
-See [HTTP API](/api/http-api) for endpoint details.
+See [HTTP API](/api/http-api) for endpoint details, including `POST /abort` for cancelling the current task over HTTP.
 
 ## `golembot gateway`
 

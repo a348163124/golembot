@@ -237,7 +237,7 @@ program
 
     const { parseCommand, executeCommand } = await import('./commands.js');
 
-    const SLASH_CMDS = ['/help', '/status', '/engine', '/model', '/skill', '/reset', '/quit', '/exit'];
+    const SLASH_CMDS = ['/help', '/status', '/engine', '/model', '/skill', '/reset', '/stop', '/quit', '/exit'];
     const completer = (line: string): [string[], string] => {
       const hits = SLASH_CMDS.filter((c) => c.startsWith(line));
       return [hits.length ? hits : SLASH_CMDS, line];
@@ -262,6 +262,7 @@ program
       setEngine: (e, c) => assistant.setEngine(e, c),
       setModel: (m) => assistant.setModel(m),
       resetSession: (k) => assistant.resetSession(k),
+      cancelSession: (k) => assistant.cancel(k),
       listModels: () => assistant.listModels(),
     };
 

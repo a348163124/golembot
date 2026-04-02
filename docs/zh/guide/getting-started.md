@@ -73,6 +73,7 @@ golembot run
 - `/model [list|name]` — 查看、列出可用模型或切换模型
 - `/skill` — 列出已安装技能
 - `/cron` — 管理定时任务（列表、运行、启用、禁用、历史）
+- `/stop` — 中断当前正在执行的任务
 - `/reset` — 清除当前会话
 - `/quit` 或 `/exit` — 退出
 

@@ -74,6 +74,12 @@ function summarizeToolCall(name: string, args: string, maxLen = 72): string {
 }
 
 function buildErrorNotice(errorMessage: string, timeoutSeconds: number): { reply: string; status: string } {
+  if (/stopped by user/i.test(errorMessage)) {
+    return {
+      reply: 'The task was stopped before completion. The partial reply above may be incomplete.',
+      status: '⏹️ Stopped',
+    };
+  }
   if (/timed out/i.test(errorMessage)) {
     return {
       reply: `Task timed out after ${timeoutSeconds}s. The partial reply above may be incomplete.`,
@@ -338,7 +344,10 @@ async function createChannelAdapter(
 export async function handleMessage(
   msg: ChannelMessage,
   config: GolemConfig,
-  assistant: Pick<Assistant, 'chat' | 'setEngine' | 'setModel' | 'getStatus' | 'resetSession' | 'listModels'>,
+  assistant: Pick<
+    Assistant,
+    'chat' | 'setEngine' | 'setModel' | 'getStatus' | 'resetSession' | 'cancel' | 'listModels'
+  >,
   adapter: Pick<
     ChannelAdapter,
     'reply' | 'maxMessageLength' | 'typing' | 'getGroupMembers' | 'sendStatus' | 'updateStatus' | 'clearStatus'
@@ -365,6 +374,7 @@ export async function handleMessage(
       setEngine: (e, c) => assistant.setEngine(e, c),
       setModel: (m) => assistant.setModel(m),
       resetSession: (k) => assistant.resetSession(k),
+      cancelSession: (k) => assistant.cancel(k),
       listModels: () => assistant.listModels(),
       taskStore: cronCtx?.taskStore,
       scheduler: cronCtx?.scheduler,

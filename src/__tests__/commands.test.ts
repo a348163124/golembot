@@ -53,6 +53,7 @@ function makeCtx(overrides?: Partial<CommandContext>): CommandContext {
     setEngine: vi.fn(),
     setModel: vi.fn(),
     resetSession: vi.fn(),
+    cancelSession: vi.fn().mockResolvedValue(true),
     listModels: vi.fn().mockResolvedValue(['model-a', 'model-b', 'model-c']),
     ...overrides,
   };
@@ -69,6 +70,7 @@ describe('executeCommand', () => {
     expect(result!.text).toContain('/model');
     expect(result!.text).toContain('/skill');
     expect(result!.text).toContain('/reset');
+    expect(result!.text).toContain('/stop');
     expect(result!.data).toHaveProperty('commands');
   });
 
@@ -177,6 +179,21 @@ describe('executeCommand', () => {
     const result = await executeCommand({ name: '/reset', args: [] }, ctx);
     expect(result!.text).toContain('Session reset');
     expect(ctx.resetSession).toHaveBeenCalledWith('test-session');
+  });
+
+  it('/stop cancels the current task', async () => {
+    const ctx = makeCtx();
+    const result = await executeCommand({ name: '/stop', args: [] }, ctx);
+    expect(result!.text).toContain('Stopped');
+    expect(ctx.cancelSession).toHaveBeenCalledWith('test-session');
+    expect(result!.data).toMatchObject({ ok: true, stopped: true });
+  });
+
+  it('/stop reports when nothing is running', async () => {
+    const ctx = makeCtx({ cancelSession: vi.fn().mockResolvedValue(false) });
+    const result = await executeCommand({ name: '/stop', args: [] }, ctx);
+    expect(result!.text).toContain('No running task');
+    expect(result!.data).toMatchObject({ ok: true, stopped: false });
   });
 
   // ── Unknown command ──

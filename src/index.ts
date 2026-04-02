@@ -156,6 +156,7 @@ export interface ChatOpts {
 export interface Assistant {
   chat(message: string, opts?: ChatOpts): AsyncIterable<StreamEvent>;
   init(opts: { engine: string; name: string; role?: string }): Promise<void>;
+  cancel(sessionKey?: string): Promise<boolean>;
   resetSession(sessionKey?: string): Promise<void>;
   /** Switch engine at runtime (takes effect on next chat call). When clearModel is true, also resets the model override. */
   setEngine(engine: string, clearModel?: boolean): void;
@@ -201,6 +202,7 @@ export function createAssistant(opts: CreateAssistantOpts): Assistant {
 
   // Global concurrency counter (across all sessions for this assistant instance)
   let activeChatCount = 0;
+  const activeRuns = new Map<string, { controller: AbortController; reason?: 'timeout' | 'user' }>();
 
   // Prune expired sessions once per process lifetime per assistant instance
   let pruneDone = false;
@@ -224,6 +226,7 @@ export function createAssistant(opts: CreateAssistantOpts): Assistant {
     message: string,
     sessionKey: string,
     isRetry: boolean,
+    controller: AbortController,
     images?: ImageAttachment[],
     files?: FileAttachment[],
   ): AsyncIterable<StreamEvent> {
@@ -319,8 +322,7 @@ export function createAssistant(opts: CreateAssistantOpts): Assistant {
 
     // Timeout via AbortController
     const timeoutMs = timeoutMsOpt ?? (config.timeout ? config.timeout * 1000 : 300_000);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort('timeout'), timeoutMs);
 
     // Write user turn to history
     await appendHistory(dir, {
@@ -444,7 +446,7 @@ export function createAssistant(opts: CreateAssistantOpts): Assistant {
       if (isResumeFail) {
         await clearSession(dir, sessionKey);
         yield { type: 'warning' as const, message: 'Session could not be resumed. Starting fresh conversation.' };
-        yield* doChat(message, sessionKey, true, images, files);
+        yield* doChat(message, sessionKey, true, controller, images, files);
       }
     }
   }
@@ -484,7 +486,14 @@ export function createAssistant(opts: CreateAssistantOpts): Assistant {
     }
 
     try {
-      yield* doChat(message, sessionKey, false, images, files);
+      const controller = new AbortController();
+      activeRuns.set(sessionKey, { controller });
+      try {
+        yield* doChat(message, sessionKey, false, controller, images, files);
+      } finally {
+        const active = activeRuns.get(sessionKey);
+        if (active?.controller === controller) activeRuns.delete(sessionKey);
+      }
     } finally {
       activeChatCount--;
       mutex.release(sessionKey);
@@ -508,6 +517,15 @@ export function createAssistant(opts: CreateAssistantOpts): Assistant {
       }
       await initWorkspace(dir, config, builtinSkillsDir);
       engineOverride = initOpts.engine;
+    },
+
+    async cancel(sessionKey?: string): Promise<boolean> {
+      const key = sessionKey || DEFAULT_SESSION_KEY;
+      const active = activeRuns.get(key);
+      if (!active || active.controller.signal.aborted) return false;
+      active.reason = 'user';
+      active.controller.abort('user');
+      return true;
     },
 
     async resetSession(sessionKey?: string): Promise<void> {

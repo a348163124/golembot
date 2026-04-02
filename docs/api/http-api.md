@@ -77,7 +77,7 @@ curl -X POST http://localhost:3000/chat \
 }
 ```
 
-Available slash commands: `/help`, `/status`, `/engine [name]`, `/model [list|name]`, `/skill`, `/cron`, `/reset`.
+Available slash commands: `/help`, `/status`, `/engine [name]`, `/model [list|name]`, `/skill`, `/cron`, `/reset`, `/stop`.
 
 **Scheduled task management via HTTP:**
 
@@ -124,6 +124,36 @@ Content-Type: application/json
 **Response:**
 ```json
 { "ok": true }
+```
+
+### `POST /abort`
+
+Cancel the current in-flight task for a session without clearing its history.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Body:**
+```json
+{
+  "sessionKey": "user-123"
+}
+```
+
+`sessionKey` is optional. When omitted, GolemBot cancels the default session.
+
+**Response:**
+```json
+{ "ok": true, "aborted": true }
+```
+
+If there is no running task for that session, the response is:
+
+```json
+{ "ok": true, "aborted": false }
 ```
 
 ### `GET /health`

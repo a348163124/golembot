@@ -73,6 +73,7 @@ This opens an interactive REPL. Type your message and press Enter. The Coding Ag
 - `/model [list|name]` — show, list available, or switch model
 - `/skill` — list installed skills
 - `/cron` — manage scheduled tasks (list, run, enable, disable, history)
+- `/stop` — cancel the current running task
 - `/reset` — clear the current session
 - `/quit` or `/exit` — exit
 

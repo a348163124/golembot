@@ -35,6 +35,8 @@ export interface CommandContext {
   setModel: (model: string) => void;
   /** Reset the session for the given key. */
   resetSession: (sessionKey?: string) => Promise<void>;
+  /** Cancel the currently running invocation for the given key. */
+  cancelSession: (sessionKey?: string) => Promise<boolean>;
   /** List available models for the current engine. */
   listModels: () => Promise<string[]>;
   /** Current session key (for reset). */
@@ -82,6 +84,7 @@ const COMMANDS: Record<string, string> = {
   '/model': 'Show, switch, or list models — /model [list|name]',
   '/skill': 'List installed skills',
   '/reset': 'Clear the current session',
+  '/stop': 'Stop the current running task',
   '/cron': 'Manage scheduled tasks — /cron [list|run|enable|disable|del|history] [id]',
 };
 
@@ -105,6 +108,8 @@ export async function executeCommand(cmd: ParsedCommand, ctx: CommandContext): P
       return cmdSkill(ctx);
     case '/reset':
       return cmdReset(ctx);
+    case '/stop':
+      return cmdStop(ctx);
     case '/cron':
       return cmdCron(cmd.args, ctx);
     default:
@@ -232,6 +237,20 @@ async function cmdReset(ctx: CommandContext): Promise<CommandResult> {
   return {
     text: 'Session reset.',
     data: { ok: true },
+  };
+}
+
+async function cmdStop(ctx: CommandContext): Promise<CommandResult> {
+  const stopped = await ctx.cancelSession(ctx.sessionKey);
+  if (!stopped) {
+    return {
+      text: 'No running task to stop.',
+      data: { ok: true, stopped: false },
+    };
+  }
+  return {
+    text: 'Stopped the current task.',
+    data: { ok: true, stopped: true },
   };
 }
 

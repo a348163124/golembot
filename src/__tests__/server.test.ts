@@ -26,6 +26,15 @@ import { Scheduler } from '../scheduler.js';
 import { type CronContext, createGolemServer } from '../server.js';
 import { TaskStore } from '../task-store.js';
 
+function installDefaultEngineMock() {
+  vi.mocked(createEngine).mockImplementation(() => ({
+    async *invoke(_p: string, _opts: InvokeOpts): AsyncIterable<StreamEvent> {
+      yield { type: 'text', content: 'hello' };
+      yield { type: 'done', sessionId: 'srv-sess-1' };
+    },
+  }));
+}
+
 function request(
   server: http.Server,
   method: string,
@@ -62,6 +71,7 @@ describe('Golem HTTP Server', () => {
   let server: GolemServer;
 
   beforeEach(async () => {
+    installDefaultEngineMock();
     dir = await mkdtemp(join(tmpdir(), 'golem-test-server-'));
     await writeFile(join(dir, 'golem.yaml'), 'name: srv-bot\nengine: cursor\n');
     await mkdir(join(dir, 'skills', 'general'), { recursive: true });
@@ -166,6 +176,65 @@ describe('Golem HTTP Server', () => {
       const res = await request(server, 'POST', '/reset', {});
       expect(res.status).toBe(200);
     });
+  });
+
+  describe('POST /abort', () => {
+    it('returns aborted=false when no task is running', async () => {
+      await startServer();
+      const res = await request(server, 'POST', '/abort', { sessionKey: 'test' });
+      expect(res.status).toBe(200);
+      expect(JSON.parse(res.body)).toEqual({ ok: true, aborted: false });
+    });
+
+    it('returns aborted=true and stops an active task', async () => {
+      vi.mocked(createEngine).mockReturnValue({
+        async *invoke(_p: string, opts: InvokeOpts): AsyncIterable<StreamEvent> {
+          await new Promise<void>((resolve) => {
+            if (opts.signal?.aborted) return resolve();
+            opts.signal?.addEventListener('abort', () => resolve(), { once: true });
+          });
+          yield {
+            type: 'error',
+            message: opts.signal?.reason === 'user' ? 'Agent invocation stopped by user' : 'Agent invocation timed out',
+          };
+        },
+      } as any);
+
+      const assistant = createAssistant({ dir, timeoutMs: 5000 });
+      server = createGolemServer(assistant, {});
+      await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+      const addr = server.address() as { port: number };
+
+      const received: string[] = [];
+      const chatDone = new Promise<void>((resolve) => {
+        const req = http.request(
+          {
+            hostname: '127.0.0.1',
+            port: addr.port,
+            path: '/chat',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          },
+          (res) => {
+            res.on('data', (chunk: Buffer) => received.push(chunk.toString()));
+            res.on('end', resolve);
+          },
+        );
+        req.write(JSON.stringify({ message: 'slow task', sessionKey: 'abort-me' }));
+        req.end();
+      });
+
+      await new Promise((r) => setTimeout(r, 30));
+
+      const abortRes = await request(server, 'POST', '/abort', { sessionKey: 'abort-me' });
+      expect(abortRes.status).toBe(200);
+      expect(JSON.parse(abortRes.body)).toEqual({ ok: true, aborted: true });
+
+      await chatDone;
+      const combined = received.join('');
+      expect(combined).toContain('"type":"error"');
+      expect(combined).toContain('stopped by user');
+    }, 5000);
   });
 
   describe('auth', () => {
@@ -376,13 +445,7 @@ describe('Golem HTTP Server', () => {
 
   describe('conversation history', () => {
     beforeEach(() => {
-      // Explicitly reset engine to default to avoid state bleed from other tests
-      vi.mocked(createEngine).mockImplementation(() => ({
-        async *invoke(_p: string, _opts: InvokeOpts): AsyncIterable<StreamEvent> {
-          yield { type: 'text', content: 'hello' };
-          yield { type: 'done', sessionId: 'srv-sess-1' };
-        },
-      }));
+      installDefaultEngineMock();
     });
 
     it('writes history.jsonl after a /chat request', async () => {
@@ -545,6 +608,16 @@ describe('Golem HTTP Server', () => {
       const body = JSON.parse(res.body);
       expect(body.type).toBe('command');
       expect(body.text).toContain('Engine');
+    });
+
+    it('/stop returns JSON command result', async () => {
+      await startServerWithDir();
+      const res = await request(server, 'POST', '/chat', { message: '/stop', sessionKey: 'http-user' });
+      expect(res.status).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.type).toBe('command');
+      expect(body.text).toContain('No running task');
+      expect(body.stopped).toBe(false);
     });
 
     it('/cron returns gateway-only hint (standalone server has no task store)', async () => {

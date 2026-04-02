@@ -104,7 +104,7 @@ export function createGolemServer(
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(html);
       } else {
-        json(res, 200, { hint: 'Use POST /chat to interact', endpoints: ['/chat', '/reset', '/health'] });
+        json(res, 200, { hint: 'Use POST /chat to interact', endpoints: ['/chat', '/abort', '/reset', '/health'] });
       }
       return;
     }
@@ -186,6 +186,7 @@ export function createGolemServer(
             setEngine: (e, c) => assistant.setEngine(e, c),
             setModel: (m) => assistant.setModel(m),
             resetSession: (k) => assistant.resetSession(k),
+            cancelSession: (k) => assistant.cancel(k),
             listModels: () => assistant.listModels(),
             taskStore: cronCtx?.taskStore,
             scheduler: cronCtx?.scheduler,
@@ -260,6 +261,22 @@ export function createGolemServer(
 
       await assistant.resetSession(body.sessionKey);
       json(res, 200, { ok: true });
+      return;
+    }
+
+    // POST /abort
+    if (path === '/abort' && req.method === 'POST') {
+      let body: { sessionKey?: string } = {};
+      try {
+        const raw = await readBody(req);
+        if (raw.trim()) body = JSON.parse(raw);
+      } catch {
+        json(res, 400, { error: 'Invalid JSON body' });
+        return;
+      }
+
+      const aborted = await assistant.cancel(body.sessionKey);
+      json(res, 200, { ok: true, aborted });
       return;
     }
 
@@ -521,6 +538,7 @@ export async function startServer(assistant: Assistant, opts: ServerOpts = {}, d
       const tokenStatus = opts.token || process.env.GOLEM_TOKEN ? 'enabled' : 'disabled (set --token or GOLEM_TOKEN)';
       console.log(`🤖 Golem server listening on http://${hostname}:${port}`);
       console.log(`   POST /chat    — SSE streaming chat`);
+      console.log(`   POST /abort   — stop current task`);
       console.log(`   POST /reset   — reset session`);
       console.log(`   GET  /health  — health check`);
       console.log(`   Auth: ${tokenStatus}`);

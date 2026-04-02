@@ -90,6 +90,8 @@ golembot fleet ls         # list all running bots
 golembot skill search "data analysis"  # browse community skills
 ```
 
+Need to interrupt a long-running task? Use `/stop` in REPL or IM, or call `POST /abort` in the [HTTP API](/api/http-api#post-abort).
+
 Or use as a library — 5 lines of code:
 
 ```typescript

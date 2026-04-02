@@ -41,6 +41,7 @@ interface Assistant {
   chat(message: string, opts?: ChatOpts): AsyncIterable<StreamEvent>;
   init(opts: { engine: string; name: string }): Promise<void>;
   resetSession(sessionKey?: string): Promise<void>;
+  cancel(sessionKey?: string): Promise<boolean>;
 }
 ```
 
@@ -88,6 +89,17 @@ Clear the session for a given key (default: `"default"`).
 await assistant.resetSession();            // clear default session
 await assistant.resetSession('user-123');   // clear specific session
 ```
+
+### `cancel(sessionKey?)`
+
+Cancel the current in-flight task for a given session without clearing its history.
+
+```typescript
+await assistant.cancel();             // cancel default session task
+await assistant.cancel('user-123');   // cancel a specific session task
+```
+
+Returns `true` if a running invocation was canceled, otherwise `false`.
 
 ## Usage Examples
 

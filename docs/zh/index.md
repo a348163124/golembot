@@ -90,6 +90,8 @@ golembot fleet ls         # 列出所有运行中的 bot
 golembot skill search "数据分析"  # 浏览社区技能
 ```
 
+如果要中断一个长任务，可以在 REPL 或 IM 中使用 `/stop`，或通过 [HTTP API](/zh/api/http-api#post-abort) 调用 `POST /abort`。
+
 或作为库使用 — 5 行代码：
 
 ```typescript

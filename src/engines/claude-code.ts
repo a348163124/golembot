@@ -247,7 +247,9 @@ export class ClaudeCodeEngine implements AgentEngine {
         } catch {
           /* already dead */
         }
-        enqueue({ type: 'error', message: 'Agent invocation timed out' });
+        const reason =
+          opts.signal?.reason === 'user' ? 'Agent invocation stopped by user' : 'Agent invocation timed out';
+        enqueue({ type: 'error', message: reason });
         enqueue(null);
       };
       opts.signal.addEventListener('abort', abortHandler, { once: true });

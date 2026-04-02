@@ -31,6 +31,7 @@ interface Assistant {
   chat(message: string, opts?: ChatOpts): AsyncIterable<StreamEvent>;
   init(opts: { engine: string; name: string }): Promise<void>;
   resetSession(sessionKey?: string): Promise<void>;
+  cancel(sessionKey?: string): Promise<boolean>;
 }
 ```
 
@@ -67,6 +68,17 @@ for await (const event of assistant.chat('你好', { sessionKey: 'user-123' })) 
 ### `resetSession(sessionKey?)`
 
 清除指定 Key 的会话（默认：`"default"`）。
+
+### `cancel(sessionKey?)`
+
+中断指定会话当前正在执行的任务，但不清空历史。
+
+```typescript
+await assistant.cancel();            // 中断默认会话
+await assistant.cancel('user-123');  // 中断指定会话
+```
+
+如果确实取消到了一个正在运行的任务，返回 `true`；否则返回 `false`。
 
 ## 生产环境：限流 + 超时
 
