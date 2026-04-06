@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { assessCodexProviderCompatibility } from './codex-provider-compat.js';
 import { isOnPath } from './engine.js';
 import { daysUntilExpiry, loadTokenMeta } from './token-meta.js';
 import { loadConfig, type ProviderConfig, scanSkills } from './workspace.js';
@@ -135,6 +136,17 @@ export async function runDoctor(dir: string): Promise<void> {
             ? `unresolved placeholder — set the env var (${fbKey})`
             : 'not set — add apiKey to provider.fallback block in golem.yaml',
       });
+    }
+
+    if (engine === 'codex') {
+      const compatibility = assessCodexProviderCompatibility(providerConfig);
+      if (compatibility) {
+        results.push({
+          name: 'Codex provider compatibility',
+          ok: !compatibility.likelyIncompatible,
+          detail: compatibility.detail,
+        });
+      }
     }
   }
 

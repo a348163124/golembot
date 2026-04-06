@@ -9,6 +9,10 @@ The Codex engine invokes the OpenAI `codex` CLI (`@openai/codex`), which uses Op
   - **ChatGPT OAuth** — `codex login` (for ChatGPT Plus/Pro/Team/Enterprise subscribers)
   - **API key** — set `OPENAI_API_KEY` environment variable
 
+::: warning Custom provider compatibility
+If you use Codex with a `provider` block in `golem.yaml`, that provider must support the OpenAI Responses API (`/responses`). Providers that only expose `/chat/completions` or Anthropic-style `/messages` endpoints will fail. See [Provider Routing](/guide/provider-routing#codex-requires-responses-api).
+:::
+
 ## Configuration
 
 ```yaml

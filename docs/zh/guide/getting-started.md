@@ -20,6 +20,8 @@ golembot onboard
 
 `golembot onboard` 向导会自动检测已有鉴权，未鉴权时引导你完成配置。也可以随时运行 `golembot doctor` 检查配置状态。
 
+如果你准备把 Codex 路由到自定义 `provider`，先确认这个 Provider 支持 OpenAI Responses API。只支持 `/chat/completions` 或 Anthropic 风格 `/messages` 的端点不能和 Codex 配合。详见 [Provider 路由](/zh/guide/provider-routing#codex-要求-responses-api)。
+
 ## 安装
 
 ```bash

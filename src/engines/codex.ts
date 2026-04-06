@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { lstat, mkdir, readdir, symlink, unlink } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
+import { assessCodexProviderCompatibility } from '../codex-provider-compat.js';
 import type { AgentEngine, InvokeOpts, ListModelsOpts, StreamEvent } from '../engine.js';
 import { codexProviderEnv } from './provider-env.js';
 import { isOnPath, stripAnsi } from './shared.js';
@@ -208,6 +209,7 @@ export class CodexEngine implements AgentEngine {
     }
 
     const args = buildCodexExecArgs(finalPrompt, opts);
+    const providerCompatibility = assessCodexProviderCompatibility(opts.provider);
 
     const env: Record<string, string> = { ...(process.env as Record<string, string>) };
     // If a Codex profile is provided, let Codex load provider/base_url/model
@@ -297,7 +299,10 @@ export class CodexEngine implements AgentEngine {
       if (code !== 0 && !gotDone && !gotError) {
         const stderrText = stderrChunks.join('\n').slice(0, 500);
         const detail = stderrText ? `: ${stderrText}` : '';
-        enqueue({ type: 'error', message: `Codex process exited with code ${code}${detail}` });
+        const hint = providerCompatibility
+          ? ' Codex custom providers must support the OpenAI Responses API (/responses).'
+          : '';
+        enqueue({ type: 'error', message: `Codex process exited with code ${code}${detail}${hint}` });
       } else if (!gotDone && !gotError) {
         enqueue({ type: 'done', sessionId: state.threadId });
       }

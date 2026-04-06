@@ -21,6 +21,7 @@ describe('doctor', () => {
     await rm(dir, { recursive: true, force: true });
     exitSpy.mockRestore();
     logSpy.mockRestore();
+    vi.unstubAllEnvs();
   });
 
   it('exits 1 when golem.yaml is missing', async () => {
@@ -62,5 +63,45 @@ describe('doctor', () => {
 
     const output = logSpy.mock.calls.map((c: unknown[]) => c.join(' ')).join('\n');
     expect(output).toContain('Skills');
+  });
+
+  it('reports Codex provider compatibility guidance for custom providers', async () => {
+    vi.stubEnv('CODEX_API_KEY', 'test-key');
+    await writeFile(
+      join(dir, 'golem.yaml'),
+      'name: codex-provider\nengine: codex\nprovider:\n  baseUrl: https://openrouter.ai/api/v1\n  apiKey: test-key\n',
+    );
+    await mkdir(join(dir, 'skills', 'general'), { recursive: true });
+    await writeFile(
+      join(dir, 'skills', 'general', 'SKILL.md'),
+      '---\nname: general\ndescription: General assistant\n---\n',
+    );
+
+    const { runDoctor } = await import('../doctor.js');
+    await runDoctor(dir);
+
+    const output = logSpy.mock.calls.map((c: unknown[]) => c.join(' ')).join('\n');
+    expect(output).toContain('Codex provider compatibility');
+    expect(output).toContain('supports the OpenAI Responses API');
+  });
+
+  it('flags Anthropic-style Codex providers as incompatible', async () => {
+    vi.stubEnv('CODEX_API_KEY', 'test-key');
+    await writeFile(
+      join(dir, 'golem.yaml'),
+      'name: codex-provider\nengine: codex\nprovider:\n  baseUrl: https://api.anthropic.com/v1/messages\n  apiKey: test-key\n',
+    );
+    await mkdir(join(dir, 'skills', 'general'), { recursive: true });
+    await writeFile(
+      join(dir, 'skills', 'general', 'SKILL.md'),
+      '---\nname: general\ndescription: General assistant\n---\n',
+    );
+
+    const { runDoctor } = await import('../doctor.js');
+    await runDoctor(dir);
+
+    const output = logSpy.mock.calls.map((c: unknown[]) => c.join(' ')).join('\n');
+    expect(output).toContain('Codex provider compatibility');
+    expect(output).toContain('Anthropic-compatible');
   });
 });

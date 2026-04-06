@@ -145,6 +145,8 @@ Slack / Telegram / Discord / 飞书 / 钉钉 / 企业微信 / 微信 / HTTP API
 
 如果你使用 Codex，要注意 GolemBot 默认采用 `codex.mode: unrestricted`。如果你希望保留 Codex 沙箱，请显式设置 `codex.mode: safe`。也可以进一步使用 `codex.sandbox`、`codex.approval`、`codex.search`、`codex.addDirs` 做细粒度控制。
 
+如果你把 Codex 路由到自定义 Provider，这个 Provider 必须支持 OpenAI Responses API。只支持 `/chat/completions` 或 Anthropic 风格 `/messages` 的网关会直接失败。详见 Provider 路由指南：https://0xranx.github.io/golembot/zh/guide/provider-routing#codex-要求-responses-api
+
 ## 配置
 
 `golem.yaml` —— 唯一的配置文件：

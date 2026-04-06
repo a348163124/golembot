@@ -432,6 +432,45 @@ describe('createAssistant', () => {
     });
   });
 
+  describe('codex provider compatibility warnings', () => {
+    it('emits a one-time warning for custom Codex providers', async () => {
+      await writeFile(
+        join(dir, 'golem.yaml'),
+        'name: test-bot\nengine: codex\nprovider:\n  baseUrl: https://openrouter.ai/api/v1\n  apiKey: test-key\n',
+      );
+
+      const assistant = createAssistant({ dir });
+      const firstEvents: StreamEvent[] = [];
+      const secondEvents: StreamEvent[] = [];
+
+      for await (const evt of assistant.chat('first call')) firstEvents.push(evt);
+      for await (const evt of assistant.chat('second call')) secondEvents.push(evt);
+
+      expect(firstEvents[0]).toMatchObject({
+        type: 'warning',
+        message: expect.stringContaining('OpenAI Responses API support'),
+      });
+      expect(firstEvents.some((evt) => evt.type === 'text')).toBe(true);
+      expect(secondEvents.some((evt) => evt.type === 'warning')).toBe(false);
+    });
+
+    it('uses a stronger warning for Anthropic-style provider URLs', async () => {
+      await writeFile(
+        join(dir, 'golem.yaml'),
+        'name: test-bot\nengine: codex\nprovider:\n  baseUrl: https://api.anthropic.com/v1/messages\n  apiKey: test-key\n',
+      );
+
+      const assistant = createAssistant({ dir });
+      const events: StreamEvent[] = [];
+      for await (const evt of assistant.chat('first call')) events.push(evt);
+
+      expect(events[0]).toMatchObject({
+        type: 'warning',
+        message: expect.stringContaining('Anthropic-compatible'),
+      });
+    });
+  });
+
   // ── rate limiting ─────────────────────────────────
 
   describe('rate limiting', () => {

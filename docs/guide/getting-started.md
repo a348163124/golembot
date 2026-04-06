@@ -20,6 +20,8 @@ Three commands. You'll be chatting with an AI agent in under a minute.
 
 The `golembot onboard` wizard will detect existing authentication and guide you through setup if needed. You can also run `golembot doctor` at any time to verify your configuration.
 
+If you plan to route Codex through a custom `provider`, verify that the provider supports the OpenAI Responses API. Providers that only expose `/chat/completions` or Anthropic-style `/messages` endpoints will not work. See [Provider Routing](/guide/provider-routing#codex-requires-responses-api).
+
 ## Install
 
 ```bash

@@ -137,7 +137,7 @@ for await (const ev of bot.chat('分析上个月的销售数据'))
   </div>
 </div>
 
-> GolemBot 中的 Codex 默认使用 `codex.mode: unrestricted`。你也可以显式配置 `safe`，或进一步使用 `codex.sandbox`、`codex.approval`、`codex.search`、`codex.addDirs`。
+> GolemBot 中的 Codex 默认使用 `codex.mode: unrestricted`。你也可以显式配置 `safe`，或进一步使用 `codex.sandbox`、`codex.approval`、`codex.search`、`codex.addDirs`。如果配了自定义 Provider，它必须支持 OpenAI Responses API。详见 [Provider 路由](/zh/guide/provider-routing#codex-要求-responses-api)。
 
 ## 通道
 

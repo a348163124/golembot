@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { FileAttachment, ImageAttachment } from './channel.js';
+import { assessCodexProviderCompatibility, codexProviderWarningFingerprint } from './codex-provider-compat.js';
 import { type AgentEngine, createEngine, type DiscoveredEngine, discoverEngines, type StreamEvent } from './engine.js';
 import { compressImages } from './image-compress.js';
 import {
@@ -218,6 +219,7 @@ export function createAssistant(opts: CreateAssistantOpts): Assistant {
 
   // OAuth token expiry warning: emit at most once per hour
   let lastExpiryWarningAt = 0;
+  const codexProviderWarnings = new Set<string>();
   function canEmitExpiryWarning(): boolean {
     return Date.now() - lastExpiryWarningAt > 3_600_000;
   }
@@ -249,6 +251,18 @@ export function createAssistant(opts: CreateAssistantOpts): Assistant {
         yield {
           type: 'warning' as const,
           message: `Claude Max OAuth token expires in ~${daysLeft} days. Run \`claude setup-token\` to renew.`,
+        };
+      }
+    }
+
+    if (engineType === 'codex' && provider) {
+      const fingerprint = codexProviderWarningFingerprint(provider);
+      const compatibility = assessCodexProviderCompatibility(provider);
+      if (fingerprint && compatibility && !codexProviderWarnings.has(fingerprint)) {
+        codexProviderWarnings.add(fingerprint);
+        yield {
+          type: 'warning' as const,
+          message: `${compatibility.warning} See Provider Routing docs before using a custom provider with Codex.`,
         };
       }
     }

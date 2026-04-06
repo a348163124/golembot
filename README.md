@@ -145,6 +145,8 @@ The `StreamEvent` interface is identical across all engines — switching requir
 
 If you run Codex, note that GolemBot defaults to `codex.mode: unrestricted`. Set `codex.mode: safe` if you want to keep Codex sandboxed. You can also use fine-grained `codex.sandbox`, `codex.approval`, `codex.search`, and `codex.addDirs` settings.
 
+If you route Codex through a custom provider, that provider must support the OpenAI Responses API. Providers that only expose `/chat/completions` or Anthropic-style `/messages` endpoints will fail. See the Provider Routing guide: https://0xranx.github.io/golembot/guide/provider-routing#codex-requires-responses-api
+
 ## Configuration
 
 `golem.yaml` — the single config file:

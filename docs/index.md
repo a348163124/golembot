@@ -137,7 +137,7 @@ Switch engines by changing one line in `golem.yaml` — the [StreamEvent](/api/s
   </div>
 </div>
 
-> Codex in GolemBot defaults to `codex.mode: unrestricted`. You can switch to `safe` or configure `codex.sandbox`, `codex.approval`, `codex.search`, and `codex.addDirs` explicitly.
+> Codex in GolemBot defaults to `codex.mode: unrestricted`. You can switch to `safe` or configure `codex.sandbox`, `codex.approval`, `codex.search`, and `codex.addDirs` explicitly. If you use a custom provider, it must support the OpenAI Responses API. See [Provider Routing](/guide/provider-routing#codex-requires-responses-api).
 
 ## Channels
 
