@@ -1,3 +1,10 @@
+# [0.45.0](https://github.com/0xranx/golembot/compare/v0.44.0...v0.45.0) (2026-04-06)
+
+
+### Features
+
+* warn on incompatible codex providers ([f14536a](https://github.com/0xranx/golembot/commit/f14536a69b4a1dace5eea4e61c0d4c67baef791f))
+
 # [0.44.0](https://github.com/0xranx/golembot/compare/v0.43.1...v0.44.0) (2026-04-02)
 
 
