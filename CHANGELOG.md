@@ -1,3 +1,11 @@
+## [0.45.2](https://github.com/0xranx/golembot/compare/v0.45.1...v0.45.2) (2026-04-07)
+
+
+### Bug Fixes
+
+* prefer PATH-resolved cli shims on Windows ([aeca86e](https://github.com/0xranx/golembot/commit/aeca86e37bdf4d106b74bbe32e611250b2251c8c))
+* reset session history by default ([4c14e9b](https://github.com/0xranx/golembot/commit/4c14e9bb818b0485a04b9c6806515f01cc78ca4c))
+
 ## [0.45.1](https://github.com/0xranx/golembot/compare/v0.45.0...v0.45.1) (2026-04-07)
 
 
