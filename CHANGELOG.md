@@ -1,3 +1,15 @@
+## [0.45.3](https://github.com/0xranx/golembot/compare/v0.45.2...v0.45.3) (2026-04-07)
+
+
+### Bug Fixes
+
+* add safe event debug summaries ([f0ac718](https://github.com/0xranx/golembot/commit/f0ac718d5d34463c0abd40fd9e6071cf30f2ca64))
+* prefer powershell cli shims on Windows ([86ee18a](https://github.com/0xranx/golembot/commit/86ee18afe6edb02500215f4038de0819ca4ab0ee))
+* prefer sibling windows shims over bare command ([ab1ecb0](https://github.com/0xranx/golembot/commit/ab1ecb0a5462723c04837e237e10aff3a12dc3f3))
+* preview non-json cli stdout ([9bab172](https://github.com/0xranx/golembot/commit/9bab172b88140ccf797057b9967b63815bdab3a1))
+* surface done-only agent replies ([15f8c60](https://github.com/0xranx/golembot/commit/15f8c6059d84c86edea18b67103f03b9b55778c1))
+* surface zero-output agent exits ([170414e](https://github.com/0xranx/golembot/commit/170414e8f4c7449805ab2935896b7b9953032587))
+
 ## [0.45.2](https://github.com/0xranx/golembot/compare/v0.45.1...v0.45.2) (2026-04-07)
 
 
