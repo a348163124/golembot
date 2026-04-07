@@ -1,3 +1,10 @@
+## [0.45.1](https://github.com/0xranx/golembot/compare/v0.45.0...v0.45.1) (2026-04-07)
+
+
+### Bug Fixes
+
+* support windows cli shims ([5465e2f](https://github.com/0xranx/golembot/commit/5465e2f920fcd67be3eaa12d87981679561be7b8))
+
 # [0.45.0](https://github.com/0xranx/golembot/compare/v0.44.0...v0.45.0) (2026-04-06)
 
 
