@@ -1,3 +1,10 @@
+# [0.46.0](https://github.com/0xranx/golembot/compare/v0.45.3...v0.46.0) (2026-04-12)
+
+
+### Features
+
+* add completion contract ([9a23f0e](https://github.com/0xranx/golembot/commit/9a23f0e89ff3ce7cde7b2ef6a6ded43d7d4b9aa7))
+
 ## [0.45.3](https://github.com/0xranx/golembot/compare/v0.45.2...v0.45.3) (2026-04-07)
 
 
