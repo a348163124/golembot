@@ -286,7 +286,7 @@ Design principles:
 - Default key is `"default"` — single-user scenarios need not be aware of sessionKey
 - Different sessionKeys map to different engine sessions, but **share the same skills and working directory**
 - Lock granularity changed from "one global lock" to **per-sessionKey locking**: same key queues, different keys run in parallel
-- `resetSession(key?)` clears the session for the specified key; omitting it clears `"default"`
+- `resetSession(key?)` clears the session and accumulated history for the specified key; omitting it clears `"default"`
 
 ### HTTP Service (`golembot serve`)
 
@@ -306,6 +306,7 @@ POST /chat
     data: {"type":"text","content":"Hello"}
     data: {"type":"tool_call","name":"readFile","args":"{}"}
     data: {"type":"done","sessionId":"xxx"}
+    data: {"type":"completion","status":"completed","finalText":"Hello","sessionId":"xxx"}
 
 POST /reset
   Headers: Authorization: Bearer <token>
@@ -319,6 +320,7 @@ GET /health
 **Design principles:**
 - Uses Node.js built-in `node:http`, zero extra dependencies
 - SSE protocol (`text/event-stream`), consumable by all languages/platforms
+- `completion` is the terminal contract; `done` remains a lower-level engine end event for compatibility
 - Bearer token authentication (`--token` parameter or `GOLEM_TOKEN` environment variable)
 - `server.ts` exports a `createServer()` factory, usable by both CLI and third parties
 

@@ -24,6 +24,16 @@ interface CreateAssistantOpts {
 }
 ```
 
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `dir` | `string` | 是 | 助手目录路径（必须包含 `golem.yaml`） |
+| `engine` | `string` | 否 | 覆盖 `golem.yaml` 中的 `engine` |
+| `model` | `string` | 否 | 覆盖 `golem.yaml` 中的 `model` |
+| `apiKey` | `string` | 否 | 传给底层引擎的 API Key |
+| `maxConcurrent` | `number` | 否 | 全局最大并发 chat 数。超出时会先产出 `error`，再以 `completion: failed` 收尾。默认 `10` |
+| `maxQueuePerSession` | `number` | 否 | 每个 `sessionKey` 的最大排队数。超出时会先产出 `error`，再以 `completion: failed` 收尾。默认 `3` |
+| `timeoutMs` | `number` | 否 | 引擎调用超时毫秒数。超时会中断底层 CLI，先产出 `error`，最后以 `completion: aborted` 收尾。默认 `300000` |
+
 ## Assistant 接口
 
 ```typescript
@@ -47,6 +57,8 @@ interface ChatOpts {
 
 返回 `AsyncIterable<StreamEvent>`。详见 [StreamEvent](/zh/api/stream-events)。
 
+每次 `chat()` 调用现在都会以且仅以一个 `type: 'completion'` 事件收尾。它才是最终的终态语义；`done` 仍然保留，但只表示底层引擎流结束。
+
 **并发**：相同 `sessionKey` 的调用串行化（排队）。不同 `sessionKey` 并行运行。
 
 ```typescript
@@ -67,7 +79,12 @@ for await (const event of assistant.chat('你好', { sessionKey: 'user-123' })) 
 
 ### `resetSession(sessionKey?)`
 
-清除指定 Key 的会话（默认：`"default"`）。
+清除指定 Key 的会话和累计历史（默认：`"default"`）。
+
+```typescript
+await assistant.resetSession();            // 清除默认会话 + 历史
+await assistant.resetSession('user-123');  // 清除指定会话 + 历史
+```
 
 ### `cancel(sessionKey?)`
 
@@ -90,10 +107,13 @@ const assistant = createAssistant({
   timeoutMs: 120_000,      // 2 分钟强制超时
 });
 
-// 处理限流 / 超时的 error 事件
+// 处理限流 / 超时 / 最终终态
 for await (const event of assistant.chat('你好', { sessionKey: 'user-1' })) {
   if (event.type === 'error') {
     console.error('聊天错误:', event.message);
+  }
+  if (event.type === 'completion') {
+    console.log('终态:', event.status);
     break;
   }
   if (event.type === 'text') process.stdout.write(event.content);
@@ -106,6 +126,7 @@ for await (const event of assistant.chat('你好', { sessionKey: 'user-1' })) {
 
 ```typescript
 export type { StreamEvent } from './engine.js';
+export type { CompletionEvent } from './engine.js';
 export type { GolemConfig, SkillInfo, ChannelsConfig, GatewayConfig,
               StreamingConfig } from './workspace.js';
 export { createGolemServer, startServer, type ServerOpts } from './server.js';

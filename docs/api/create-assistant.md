@@ -30,9 +30,9 @@ interface CreateAssistantOpts {
 | `engine` | `string` | No | Override the `engine` field in `golem.yaml`. One of `cursor`, `claude-code`, `opencode`, `codex` |
 | `model` | `string` | No | Override the `model` field in `golem.yaml` |
 | `apiKey` | `string` | No | API key passed to the engine. Alternatively set via environment variables (`CURSOR_API_KEY`, `ANTHROPIC_API_KEY`, etc.) |
-| `maxConcurrent` | `number` | No | Maximum number of parallel `chat()` calls across all sessions. Excess calls receive an immediate `type: 'error'` event. Default: `10` |
-| `maxQueuePerSession` | `number` | No | Maximum number of requests queued per `sessionKey`. When full, additional requests receive `type: 'error'` instead of waiting. Default: `3` |
-| `timeoutMs` | `number` | No | Engine invocation timeout in milliseconds. Aborts the underlying CLI process and yields a `type: 'error'` event. Default: `300000` (5 min). Can also be set via `timeout` in `golem.yaml` |
+| `maxConcurrent` | `number` | No | Maximum number of parallel `chat()` calls across all sessions. Excess calls emit `type: 'error'` and then a terminal `type: 'completion'` with `status: 'failed'`. Default: `10` |
+| `maxQueuePerSession` | `number` | No | Maximum number of requests queued per `sessionKey`. When full, additional requests emit `type: 'error'` and then `type: 'completion'` with `status: 'failed'`. Default: `3` |
+| `timeoutMs` | `number` | No | Engine invocation timeout in milliseconds. Aborts the underlying CLI process, emits `type: 'error'`, and ends with `type: 'completion'` and `status: 'aborted'`. Default: `300000` (5 min). Can also be set via `timeout` in `golem.yaml` |
 
 ## Assistant Interface
 
@@ -56,6 +56,8 @@ interface ChatOpts {
 ```
 
 Returns an `AsyncIterable<StreamEvent>`. See [StreamEvent](/api/stream-events) for all event types.
+
+Each `chat()` call now ends with exactly one terminal `type: 'completion'` event. Treat that as the authoritative outcome for success, silence, failure, or abort. The lower-level `done` event is still emitted for compatibility with existing consumers.
 
 **Concurrency**: calls with the same `sessionKey` are serialized (queued). Different `sessionKey`s run in parallel.
 
@@ -83,11 +85,11 @@ Throws if `golem.yaml` already exists.
 
 ### `resetSession(sessionKey?)`
 
-Clear the session for a given key (default: `"default"`).
+Clear the session and accumulated history for a given key (default: `"default"`).
 
 ```typescript
-await assistant.resetSession();            // clear default session
-await assistant.resetSession('user-123');   // clear specific session
+await assistant.resetSession();             // clear default session + history
+await assistant.resetSession('user-123');   // clear a specific session + history
 ```
 
 ### `cancel(sessionKey?)`
@@ -115,8 +117,12 @@ for await (const event of assistant.chat('What files are in this directory?')) {
     case 'text':
       process.stdout.write(event.content);
       break;
-    case 'done':
-      console.log(`\n(${event.durationMs}ms, $${event.costUsd})`);
+    case 'completion':
+      if (event.status === 'completed') {
+        console.log(`\n(${event.durationMs}ms, $${event.costUsd})`);
+      } else if (event.status === 'failed') {
+        console.error(`\nFailed: ${event.message}`);
+      }
       break;
   }
 }
@@ -153,10 +159,13 @@ const assistant = createAssistant({
   timeoutMs: 120_000,      // 2-minute hard timeout per invocation
 });
 
-// Handle error events from rate limiting / timeout
+// Handle rate limiting / timeout / final status
 for await (const event of assistant.chat('Hello', { sessionKey: 'user-1' })) {
   if (event.type === 'error') {
     console.error('Chat error:', event.message);
+  }
+  if (event.type === 'completion') {
+    console.log('Terminal status:', event.status);
     break;
   }
   if (event.type === 'text') process.stdout.write(event.content);
@@ -169,6 +178,7 @@ The `golembot` package also re-exports:
 
 ```typescript
 export type { StreamEvent } from './engine.js';
+export type { CompletionEvent } from './engine.js';
 export type { GolemConfig, SkillInfo, ChannelsConfig, GatewayConfig,
               StreamingConfig, FeishuChannelConfig, DingtalkChannelConfig,
               WecomChannelConfig } from './workspace.js';

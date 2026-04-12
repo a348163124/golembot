@@ -42,14 +42,14 @@ golembot run [-d <dir>] [--api-key <key>]
 | `/cron disable <id>` | 禁用指定任务 |
 | `/cron del <id>` | 删除指定任务 |
 | `/cron history <id>` | 查看指定任务的执行历史 |
-| `/reset` | 清除当前会话 |
+| `/reset` | 清除当前会话和历史 |
 | `/quit`、`/exit` | 退出 REPL |
 
 这些斜杠命令同样适用于 IM 通道（飞书、Telegram、Slack 等）和 HTTP API（通过 `POST /chat` 发送斜杠命令时返回 JSON 响应而非 SSE 流）。定时任务在 `golem.yaml` 的 [`tasks`](/zh/guide/configuration#tasks) 中配置。
 
-`/stop` 只会中断当前会话里正在执行的任务，不会清空会话历史；如果要清会话，继续使用 `/reset`。
+`/stop` 只会中断当前会话里正在执行的任务，不会清空会话历史；如果要清空当前会话及其累计历史，使用 `/reset`。
 
-支持 `"""` 分隔符的多行输入。完成时显示耗时和费用（如可用）。
+支持 `"""` 分隔符的多行输入。REPL 现在和 HTTP / Gateway 一样，都会在最后收敛成统一的 `completion` 终态：`completed`、`silent`、`failed` 或 `aborted`。完成时显示耗时和费用（如可用）。
 
 ## `golembot serve`
 

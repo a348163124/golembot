@@ -1194,6 +1194,31 @@ describe('handleMessage — full gateway pipeline', () => {
       expect(adapter.replies[0].text).toBe('Part 1.\n\nPart 2.');
     });
 
+    it('buffered mode sends completion.finalText when no text chunks were emitted', async () => {
+      const assistant = makeStreamingAssistant([
+        { type: 'completion', status: 'completed', finalText: 'Final answer from completion.', sessionId: 'x' },
+      ]);
+      const adapter = makeMockAdapter();
+      const msg = makeDmMsg();
+      const config = makeConfig({ streaming: { mode: 'buffered' } } as any);
+
+      await handleMessage(msg, config, assistant, adapter, 'slack', false, dir);
+
+      expect(adapter.replies).toHaveLength(1);
+      expect(adapter.replies[0].text).toBe('Final answer from completion.');
+    });
+
+    it('buffered mode stays silent for silent completion outcomes', async () => {
+      const assistant = makeStreamingAssistant([{ type: 'completion', status: 'silent', reason: 'pass' }]);
+      const adapter = makeMockAdapter();
+      const msg = makeGroupMsg();
+      const config = makeConfig({ streaming: { mode: 'buffered' } } as any);
+
+      await handleMessage(msg, config, assistant, adapter, 'slack', false, dir);
+
+      expect(adapter.replies).toHaveLength(0);
+    });
+
     it('streaming mode splits on paragraph boundaries', async () => {
       const assistant = makeStreamingAssistant([
         { type: 'text', content: 'First paragraph.\n\nSecond paragraph.' },
@@ -1455,6 +1480,20 @@ describe('handleMessage — full gateway pipeline', () => {
 
       expect(adapter.replies).toHaveLength(1);
       expect(adapter.replies[0].text).toBe('Final answer from done.');
+    });
+
+    it('sends completion.finalText when no text chunks were emitted', async () => {
+      const assistant = makeStreamingAssistant([
+        { type: 'completion', status: 'completed', finalText: 'Final answer from completion.', sessionId: 'x' },
+      ]);
+      const adapter = makeMockAdapter();
+      const msg = makeDmMsg();
+      const config = makeConfig({ streaming: { mode: 'streaming' } } as any);
+
+      await handleMessage(msg, config, assistant, adapter, 'slack', false, dir);
+
+      expect(adapter.replies).toHaveLength(1);
+      expect(adapter.replies[0].text).toBe('Final answer from completion.');
     });
   });
 

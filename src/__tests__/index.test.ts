@@ -83,6 +83,15 @@ describe('createAssistant', () => {
       expect(events).toEqual([
         { type: 'text', content: 'Reply: Hello' },
         { type: 'done', sessionId: 'mock-session-001' },
+        {
+          type: 'completion',
+          status: 'completed',
+          finalText: 'Reply: Hello',
+          sessionId: 'mock-session-001',
+          durationMs: undefined,
+          costUsd: undefined,
+          numTurns: undefined,
+        },
       ]);
     });
 
@@ -91,7 +100,7 @@ describe('createAssistant', () => {
       const assistant = createAssistant({ dir });
       const events: StreamEvent[] = [];
       for await (const evt of assistant.chat('Analyze data')) events.push(evt);
-      expect(events.map((e) => e.type)).toEqual(['text', 'tool_call', 'text', 'done']);
+      expect(events.map((e) => e.type)).toEqual(['text', 'tool_call', 'text', 'done', 'completion']);
     });
 
     it('error scenario', async () => {
@@ -100,6 +109,16 @@ describe('createAssistant', () => {
       const events: StreamEvent[] = [];
       for await (const evt of assistant.chat('task')) events.push(evt);
       expect(events[1]).toEqual({ type: 'error', message: 'Agent process crashed unexpectedly' });
+      expect(events[2]).toEqual({
+        type: 'completion',
+        status: 'failed',
+        message: 'Agent process crashed unexpectedly',
+        partialText: 'Processing...',
+        sessionId: undefined,
+        durationMs: undefined,
+        costUsd: undefined,
+        numTurns: undefined,
+      });
     });
 
     it('warns before restoring prior history for a fresh session', async () => {
@@ -130,8 +149,18 @@ describe('createAssistant', () => {
       });
 
       const assistant = createAssistant({ dir });
-      for await (const _ of assistant.chat('Hello')) {
-      }
+      const events: StreamEvent[] = [];
+      for await (const evt of assistant.chat('Hello')) events.push(evt);
+
+      expect(events[events.length - 1]).toEqual({
+        type: 'completion',
+        status: 'completed',
+        finalText: 'Done-only reply.',
+        sessionId: 'done-only',
+        durationMs: undefined,
+        costUsd: undefined,
+        numTurns: undefined,
+      });
 
       expect(await readHistory(dir, 'default')).toEqual([
         { ts: expect.any(String), sessionKey: 'default', role: 'user', content: 'Hello' },
@@ -144,6 +173,29 @@ describe('createAssistant', () => {
           costUsd: undefined,
         },
       ]);
+    });
+
+    it('emits a silent completion for PASS sentinel replies', async () => {
+      mockedCreateEngine.mockReturnValue({
+        async *invoke() {
+          yield { type: 'text', content: '[PASS]' } as StreamEvent;
+          yield { type: 'done', sessionId: 'silent-session' } as StreamEvent;
+        },
+      });
+
+      const assistant = createAssistant({ dir });
+      const events: StreamEvent[] = [];
+      for await (const evt of assistant.chat('Hello')) events.push(evt);
+
+      expect(events[events.length - 1]).toEqual({
+        type: 'completion',
+        status: 'silent',
+        reason: 'pass',
+        sessionId: 'silent-session',
+        durationMs: undefined,
+        costUsd: undefined,
+        numTurns: undefined,
+      });
     });
   });
 
@@ -524,6 +576,11 @@ describe('createAssistant', () => {
       const events: StreamEvent[] = [];
       for await (const evt of assistant.chat('hello')) events.push(evt);
       expect(events[0]).toMatchObject({ type: 'error', message: /too many concurrent/i });
+      expect(events[1]).toMatchObject({
+        type: 'completion',
+        status: 'failed',
+        message: expect.stringMatching(/too many concurrent/i),
+      });
     });
 
     it('rejects per-session queue when maxQueuePerSession is 0 and session is busy', async () => {
@@ -551,6 +608,11 @@ describe('createAssistant', () => {
       for await (const evt of assistant.chat('B', { sessionKey: 'k' })) bEvents.push(evt);
 
       expect(bEvents[0]).toMatchObject({ type: 'error', message: /too many pending/i });
+      expect(bEvents[1]).toMatchObject({
+        type: 'completion',
+        status: 'failed',
+        message: expect.stringMatching(/too many pending/i),
+      });
 
       await aPromise;
       expect(aEvents.some((e) => e.type === 'done')).toBe(true);
@@ -577,6 +639,9 @@ describe('createAssistant', () => {
       for await (const evt of assistant.chat('slow task')) events.push(evt);
 
       expect(events.some((e) => e.type === 'error' && e.message.includes('timed out'))).toBe(true);
+      expect(events.some((e) => e.type === 'completion' && e.status === 'aborted' && e.reason === 'timeout')).toBe(
+        true,
+      );
     }, 5000);
 
     it('cancel() aborts the active invocation for a session', async () => {
@@ -604,6 +669,7 @@ describe('createAssistant', () => {
       await run;
 
       expect(events.some((e) => e.type === 'error' && e.message.includes('stopped by user'))).toBe(true);
+      expect(events.some((e) => e.type === 'completion' && e.status === 'aborted' && e.reason === 'user')).toBe(true);
       expect(await assistant.cancel('cancel-key')).toBe(false);
     }, 5000);
   });

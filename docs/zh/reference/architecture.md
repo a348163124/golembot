@@ -286,7 +286,7 @@ assistant.chat("查一下数据", { sessionKey: "slack:U456" })
 - 默认 key 是 `"default"`——单用户场景无需感知 sessionKey
 - 不同的 sessionKey 映射到不同的引擎会话，但**共享相同的技能和工作目录**
 - 锁粒度从"一把全局锁"变为**按 sessionKey 加锁**：相同 key 排队，不同 key 并行
-- `resetSession(key?)` 清除指定 key 的会话；省略则清除 `"default"`
+- `resetSession(key?)` 清除指定 key 的会话和累计历史；省略则清除 `"default"`
 
 ### HTTP 服务（`golembot serve`）
 
@@ -306,6 +306,7 @@ POST /chat
     data: {"type":"text","content":"你好"}
     data: {"type":"tool_call","name":"readFile","args":"{}"}
     data: {"type":"done","sessionId":"xxx"}
+    data: {"type":"completion","status":"completed","finalText":"你好","sessionId":"xxx"}
 
 POST /reset
   Headers: Authorization: Bearer <token>
@@ -319,6 +320,7 @@ GET /health
 **设计原则：**
 - 使用 Node.js 内置 `node:http`，零额外依赖
 - SSE 协议（`text/event-stream`），所有语言/平台都能消费
+- `completion` 是统一终态；`done` 继续保留为兼容用的底层引擎结束事件
 - Bearer token 认证（`--token` 参数或 `GOLEM_TOKEN` 环境变量）
 - `server.ts` 导出 `createServer()` 工厂函数，CLI 和第三方都能使用
 

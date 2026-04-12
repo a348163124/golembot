@@ -648,6 +648,33 @@ export async function handleMessage(
           hasError = true;
           lastErrorMessage = event.message;
           console.error(`[${channelType}] Engine error: ${event.message}`);
+        } else if (event.type === 'completion') {
+          costUsd = event.costUsd;
+          durationMs = event.durationMs;
+          if (event.status === 'completed') {
+            if (!fullReply.trim()) {
+              fullReply = event.finalText;
+              buffer = event.finalText;
+            }
+          } else if (event.status === 'silent') {
+            fullReply = event.reason === 'pass' ? '[PASS]' : '[SKIP]';
+            buffer = fullReply;
+          } else if (event.status === 'failed') {
+            hasError = true;
+            lastErrorMessage = event.message;
+            if (!fullReply.trim() && event.partialText) {
+              fullReply = event.partialText;
+              buffer = event.partialText;
+            }
+          } else if (event.status === 'aborted') {
+            hasError = true;
+            lastErrorMessage =
+              event.reason === 'user' ? 'Agent invocation stopped by user' : 'Agent invocation timed out';
+            if (!fullReply.trim() && event.partialText) {
+              fullReply = event.partialText;
+              buffer = event.partialText;
+            }
+          }
         } else if (event.type === 'done') {
           if (!fullReply.trim() && event.fullText) {
             fullReply = event.fullText;
@@ -703,6 +730,23 @@ export async function handleMessage(
           hasError = true;
           lastErrorMessage = event.message;
           console.error(`[${channelType}] Engine error: ${event.message}`);
+        } else if (event.type === 'completion') {
+          costUsd = event.costUsd;
+          durationMs = event.durationMs;
+          if (event.status === 'completed') {
+            if (!fullReply.trim()) fullReply = event.finalText;
+          } else if (event.status === 'silent') {
+            fullReply = event.reason === 'pass' ? '[PASS]' : '[SKIP]';
+          } else if (event.status === 'failed') {
+            hasError = true;
+            lastErrorMessage = event.message;
+            if (!fullReply.trim() && event.partialText) fullReply = event.partialText;
+          } else if (event.status === 'aborted') {
+            hasError = true;
+            lastErrorMessage =
+              event.reason === 'user' ? 'Agent invocation stopped by user' : 'Agent invocation timed out';
+            if (!fullReply.trim() && event.partialText) fullReply = event.partialText;
+          }
         } else if (event.type === 'done') {
           if (!fullReply.trim() && event.fullText) {
             fullReply = event.fullText;

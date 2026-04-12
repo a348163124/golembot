@@ -1,4 +1,39 @@
 import type { CodexConfig, McpServerConfig, ProviderConfig } from './workspace.js';
+export type CompletionEvent = {
+    type: 'completion';
+    status: 'completed';
+    finalText: string;
+    sessionId?: string;
+    durationMs?: number;
+    costUsd?: number;
+    numTurns?: number;
+} | {
+    type: 'completion';
+    status: 'silent';
+    reason: 'pass' | 'skip';
+    sessionId?: string;
+    durationMs?: number;
+    costUsd?: number;
+    numTurns?: number;
+} | {
+    type: 'completion';
+    status: 'failed';
+    message: string;
+    partialText?: string;
+    sessionId?: string;
+    durationMs?: number;
+    costUsd?: number;
+    numTurns?: number;
+} | {
+    type: 'completion';
+    status: 'aborted';
+    reason: 'user' | 'timeout';
+    partialText?: string;
+    sessionId?: string;
+    durationMs?: number;
+    costUsd?: number;
+    numTurns?: number;
+};
 export type StreamEvent = {
     type: 'text';
     content: string;
@@ -22,7 +57,7 @@ export type StreamEvent = {
     costUsd?: number;
     numTurns?: number;
     fullText?: string;
-};
+} | CompletionEvent;
 export interface InvokeOpts {
     workspace: string;
     skillPaths: string[];

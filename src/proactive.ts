@@ -85,6 +85,19 @@ export class ProactiveCoordinator {
         } else if (event.type === 'done') {
           costUsd = event.costUsd;
           durationMs = event.durationMs;
+        } else if (event.type === 'completion') {
+          costUsd = event.costUsd;
+          durationMs = event.durationMs;
+          if (!reply && event.status === 'completed') {
+            reply = event.finalText;
+          } else if (!reply && (event.status === 'failed' || event.status === 'aborted') && event.partialText) {
+            reply = event.partialText;
+          }
+          if (event.status === 'failed') {
+            error = event.message;
+          } else if (event.status === 'aborted') {
+            error = event.reason === 'user' ? 'Task stopped by user' : 'Task timed out';
+          }
         }
       }
 

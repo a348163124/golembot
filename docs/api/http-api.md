@@ -55,9 +55,13 @@ data: {"type":"text","content":"Here's the analysis..."}
 
 data: {"type":"done","sessionId":"abc-123","durationMs":8500}
 
+data: {"type":"completion","status":"completed","finalText":"Here's the analysis...","sessionId":"abc-123","durationMs":8500}
+
 ```
 
 Each event is a JSON-encoded [StreamEvent](/api/stream-events).
+
+`completion` is the terminal contract for `/chat`. SSE clients should treat it as the authoritative final outcome. The lower-level `done` event is still included for compatibility and engine metadata.
 
 **Slash commands:** When the message starts with `/`, it is handled as a slash command and returns a JSON response (not SSE):
 
@@ -104,9 +108,17 @@ data: {"type":"error","message":"Agent invocation timed out"}
 Always check for `type === "error"` in your SSE handler.
 :::
 
+::: tip Prefer `completion` for terminal handling
+For robust clients, keep reading until you receive `type === "completion"`. A turn now resolves into one of four terminal states:
+- `completed`
+- `silent`
+- `failed`
+- `aborted`
+:::
+
 ### `POST /reset`
 
-Clear a session.
+Clear a session and its accumulated history.
 
 **Headers:**
 ```

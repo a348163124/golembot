@@ -18,6 +18,7 @@ describe('debug-events', () => {
       { type: 'warning', message: 'warn' },
       { type: 'error', message: 'boom' },
       { type: 'done', fullText: 'final reply', durationMs: 123, costUsd: 0.01 },
+      { type: 'completion', status: 'completed', finalText: 'final reply', durationMs: 123, costUsd: 0.01 },
     ];
 
     expect(summarizeStreamEvent(events[0])).toBe('event=text chars=11');
@@ -26,6 +27,9 @@ describe('debug-events', () => {
     expect(summarizeStreamEvent(events[3])).toBe('event=warning chars=4');
     expect(summarizeStreamEvent(events[4])).toBe('event=error chars=4');
     expect(summarizeStreamEvent(events[5])).toBe('event=done fullTextChars=11 durationMs=123 costUsd=0.01');
+    expect(summarizeStreamEvent(events[6])).toBe(
+      'event=completion status=completed finalTextChars=11 durationMs=123 costUsd=0.01',
+    );
   });
 
   it('summarizes raw assistant/result json lines', () => {

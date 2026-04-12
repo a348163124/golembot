@@ -49,7 +49,11 @@ data: {"type":"tool_call","name":"readFile","args":"{\"path\":\"sales.csv\"}"}
 
 data: {"type":"done","sessionId":"abc-123","durationMs":8500}
 
+data: {"type":"completion","status":"completed","finalText":"这是最终回复","sessionId":"abc-123","durationMs":8500}
+
 ```
+
+`completion` 是 `/chat` 的统一终态契约。SSE 客户端应优先用它判断本轮最终是完成、静默、失败还是中断。`done` 仍会保留，但主要用于兼容旧消费者和携带底层引擎元数据。
 
 **斜杠命令：** 当消息以 `/` 开头时，将作为斜杠命令处理并返回 JSON 响应（非 SSE）：
 
@@ -99,9 +103,17 @@ data: {"type":"error","message":"Agent invocation timed out"}
 请在 SSE 处理器中始终检查 `type === "error"`。
 :::
 
+::: tip 终态建议
+如果你在写稳定的 SSE 客户端，请持续读取直到收到 `type === "completion"`。一轮调用最终只会落到四种状态之一：
+- `completed`
+- `silent`
+- `failed`
+- `aborted`
+:::
+
 ### `POST /reset`
 
-清除会话。请求体：`{ "sessionKey": "user-123" }`。响应：`{ "ok": true }`。
+清除会话及其累计历史。请求体：`{ "sessionKey": "user-123" }`。响应：`{ "ok": true }`。
 
 ### `POST /abort`
 

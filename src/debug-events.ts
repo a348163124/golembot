@@ -23,6 +23,17 @@ export function summarizeStreamEvent(event: StreamEvent): string {
       return `event=error chars=${event.message.length}`;
     case 'done':
       return `event=done fullTextChars=${event.fullText?.length ?? 0} durationMs=${event.durationMs ?? 'n/a'} costUsd=${event.costUsd ?? 'n/a'}`;
+    case 'completion':
+      if (event.status === 'completed') {
+        return `event=completion status=completed finalTextChars=${event.finalText.length} durationMs=${event.durationMs ?? 'n/a'} costUsd=${event.costUsd ?? 'n/a'}`;
+      }
+      if (event.status === 'silent') {
+        return `event=completion status=silent reason=${event.reason}`;
+      }
+      if (event.status === 'failed') {
+        return `event=completion status=failed partialTextChars=${event.partialText?.length ?? 0} chars=${event.message.length}`;
+      }
+      return `event=completion status=aborted reason=${event.reason} partialTextChars=${event.partialText?.length ?? 0}`;
   }
 }
 

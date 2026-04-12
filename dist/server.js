@@ -180,6 +180,15 @@ export function createGolemServer(assistant, opts = {}, dashboard, dir, getCronC
                         costUsd = event.costUsd;
                         durationMs = event.durationMs;
                     }
+                    else if (event.type === 'completion') {
+                        if (!replyText && event.status === 'completed')
+                            replyText = event.finalText;
+                        if (!replyText && (event.status === 'failed' || event.status === 'aborted') && event.partialText) {
+                            replyText = event.partialText;
+                        }
+                        costUsd = event.costUsd;
+                        durationMs = event.durationMs;
+                    }
                 }
             }
             catch (e) {

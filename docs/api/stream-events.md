@@ -5,6 +5,16 @@
 ## Type Definition
 
 ```typescript
+type CompletionEvent =
+  | { type: 'completion'; status: 'completed'; finalText: string;
+      sessionId?: string; durationMs?: number; costUsd?: number; numTurns?: number }
+  | { type: 'completion'; status: 'silent'; reason: 'pass' | 'skip';
+      sessionId?: string; durationMs?: number; costUsd?: number; numTurns?: number }
+  | { type: 'completion'; status: 'failed'; message: string; partialText?: string;
+      sessionId?: string; durationMs?: number; costUsd?: number; numTurns?: number }
+  | { type: 'completion'; status: 'aborted'; reason: 'user' | 'timeout'; partialText?: string;
+      sessionId?: string; durationMs?: number; costUsd?: number; numTurns?: number };
+
 type StreamEvent =
   | { type: 'text'; content: string }
   | { type: 'tool_call'; name: string; args: string }
@@ -12,8 +22,13 @@ type StreamEvent =
   | { type: 'warning'; message: string }
   | { type: 'error'; message: string }
   | { type: 'done'; sessionId?: string; durationMs?: number;
-      costUsd?: number; numTurns?: number; fullText?: string };
+      costUsd?: number; numTurns?: number; fullText?: string }
+  | CompletionEvent;
 ```
+
+::: tip Terminal contract
+`assistant.chat()` now always ends with exactly one `completion` event. Downstream consumers should treat `completion` as the terminal outcome and treat `done` as a lower-level engine lifecycle event kept for compatibility.
+:::
 
 ## Event Types
 
@@ -68,7 +83,7 @@ An error occurred during processing.
 
 ### `done`
 
-Signals the end of a conversation turn.
+Signals the end of a low-level engine turn.
 
 ```typescript
 {
@@ -87,6 +102,58 @@ Signals the end of a conversation turn.
 | `costUsd` | API cost in USD | Claude Code, OpenCode |
 | `numTurns` | Number of agent turns | Claude Code |
 | `fullText` | Complete agent response text | Cursor, Claude Code |
+
+`done` is not the final delivery contract. Some engines only attach metadata or `fullText` here. Prefer `completion` when deciding whether a reply completed, failed, stayed silent, or was aborted.
+
+### `completion`
+
+The terminal outcome for a chat turn.
+
+#### `completed`
+
+```typescript
+{
+  type: 'completion',
+  status: 'completed',
+  finalText: 'Here is the final answer...',
+  durationMs: 12345,
+  costUsd: 0.042
+}
+```
+
+#### `silent`
+
+```typescript
+{
+  type: 'completion',
+  status: 'silent',
+  reason: 'pass'
+}
+```
+
+Used when the assistant intentionally chooses not to reply, for example `[PASS]` / `[SKIP]` flows in gateway/group-chat routing.
+
+#### `failed`
+
+```typescript
+{
+  type: 'completion',
+  status: 'failed',
+  message: 'Engine process exited with code 1',
+  partialText: 'Partial answer...'
+}
+```
+
+#### `aborted`
+
+```typescript
+{
+  type: 'completion',
+  status: 'aborted',
+  reason: 'timeout',
+  partialText: 'Partial answer...'
+}
+```
 
 ## Consuming Events
 
@@ -117,8 +184,12 @@ for await (const event of assistant.chat('Analyze the data')) {
     case 'error':
       console.error(`[error] ${event.message}`);
       break;
-    case 'done':
-      console.log(`Done in ${event.durationMs}ms`);
+    case 'completion':
+      if (event.status === 'completed') {
+        console.log(`Completed in ${event.durationMs}ms`);
+      } else if (event.status === 'failed') {
+        console.error(`[failed] ${event.message}`);
+      }
       break;
   }
 }
@@ -130,6 +201,9 @@ for await (const event of assistant.chat('Analyze the data')) {
 let reply = '';
 for await (const event of assistant.chat(message)) {
   if (event.type === 'text') reply += event.content;
+  if (event.type === 'completion' && event.status === 'completed' && !reply) {
+    reply = event.finalText;
+  }
 }
 await sendToIM(reply);
 ```

@@ -47,14 +47,14 @@ golembot run [-d <dir>] [--api-key <key>]
 | `/cron disable <id>` | Disable a scheduled task |
 | `/cron del <id>` | Delete a scheduled task |
 | `/cron history <id>` | Show recent execution history for a task |
-| `/reset` | Clear current session |
+| `/reset` | Clear the current session and history |
 | `/quit`, `/exit` | Exit the REPL |
 
 These slash commands also work in IM channels (Feishu, Telegram, Slack, etc.) and via the HTTP API (`POST /chat` with a slash command as the message returns a JSON response instead of an SSE stream).
 
-`/stop` cancels the current in-flight task for the session without clearing history. Use `/reset` if you want to clear the session itself.
+`/stop` cancels the current in-flight task for the session without clearing history. Use `/reset` if you want to clear the session and its accumulated history.
 
-Supports multi-line input with `"""` delimiters. Displays duration and cost (when available) on completion.
+Supports multi-line input with `"""` delimiters. REPL turns now resolve through the same terminal `completion` contract used by HTTP and gateway flows, so each run ends as `completed`, `silent`, `failed`, or `aborted`. Duration and cost are shown when available.
 
 ## `golembot serve`
 

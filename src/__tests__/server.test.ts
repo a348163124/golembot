@@ -114,9 +114,15 @@ describe('Golem HTTP Server', () => {
           const data = line.replace('data: ', '');
           return JSON.parse(data);
         });
-      expect(events).toHaveLength(2);
+      expect(events).toHaveLength(3);
       expect(events[0]).toEqual({ type: 'text', content: 'hello' });
       expect(events[1]).toEqual({ type: 'done', sessionId: 'srv-sess-1' });
+      expect(events[2]).toEqual({
+        type: 'completion',
+        status: 'completed',
+        finalText: 'hello',
+        sessionId: 'srv-sess-1',
+      });
     });
 
     it('passes sessionKey to assistant', async () => {

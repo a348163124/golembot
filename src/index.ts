@@ -32,7 +32,7 @@ export type { ChannelAdapter, ChannelMessage, ImageAttachment, ReadReceipt } fro
 export { buildSessionKey, stripMention } from './channel.js';
 export { type CommandContext, type CommandResult, executeCommand, parseCommand } from './commands.js';
 export type { ChannelStatus, DashboardContext, GatewayMetrics, RecentMessage } from './dashboard.js';
-export type { DiscoveredEngine, StreamEvent } from './engine.js';
+export type { CompletionEvent, DiscoveredEngine, StreamEvent } from './engine.js';
 export { claudeProviderEnv, codexProviderEnv, cursorProviderEnv, openCodeProviderEnv } from './engine.js';
 export type { FleetEntry, FleetInstance, FleetServerOpts } from './fleet.js';
 export {
@@ -189,6 +189,71 @@ export interface CreateAssistantOpts {
 }
 
 const DEFAULT_SESSION_KEY = 'default';
+
+function classifySilentReply(text: string): 'pass' | 'skip' | null {
+  const trimmed = text.trim();
+  if (trimmed === '[PASS]') return 'pass';
+  if (trimmed === '[SKIP]') return 'skip';
+  return null;
+}
+
+function buildCompletionEvent(params: {
+  fullReply: string;
+  doneEvt?: Extract<StreamEvent, { type: 'done' }>;
+  gotError: boolean;
+  errorMessage: string;
+  signal: AbortSignal;
+  sessionId?: string;
+}): Extract<StreamEvent, { type: 'completion' }> {
+  const { fullReply, doneEvt, gotError, errorMessage, signal, sessionId } = params;
+  const shared = {
+    sessionId: sessionId || doneEvt?.sessionId,
+    durationMs: doneEvt?.durationMs,
+    costUsd: doneEvt?.costUsd,
+    numTurns: doneEvt?.numTurns,
+  };
+  const silentReason = classifySilentReply(fullReply);
+  if (silentReason) {
+    return {
+      type: 'completion',
+      status: 'silent',
+      reason: silentReason,
+      ...shared,
+    };
+  }
+  if (signal.aborted) {
+    return {
+      type: 'completion',
+      status: 'aborted',
+      reason: signal.reason === 'user' ? 'user' : 'timeout',
+      partialText: fullReply.trim() ? fullReply : undefined,
+      ...shared,
+    };
+  }
+  if (gotError) {
+    return {
+      type: 'completion',
+      status: 'failed',
+      message: errorMessage || 'Agent error',
+      partialText: fullReply.trim() ? fullReply : undefined,
+      ...shared,
+    };
+  }
+  if (fullReply.trim()) {
+    return {
+      type: 'completion',
+      status: 'completed',
+      finalText: fullReply,
+      ...shared,
+    };
+  }
+  return {
+    type: 'completion',
+    status: 'failed',
+    message: 'Agent completed without a final reply',
+    ...shared,
+  };
+}
 
 export function createAssistant(opts: CreateAssistantOpts): Assistant {
   const dir = resolve(opts.dir);
@@ -454,6 +519,17 @@ export function createAssistant(opts: CreateAssistantOpts): Assistant {
       }
     }
 
+    if (gotError && sessionId && !isRetry) {
+      const isResumeFail =
+        errorMessage.toLowerCase().includes('resume') || errorMessage.toLowerCase().includes('session');
+      if (isResumeFail) {
+        await clearSession(dir, sessionKey);
+        yield { type: 'warning' as const, message: 'Session could not be resumed. Starting fresh conversation.' };
+        yield* doChat(message, sessionKey, true, controller, images, files);
+        return;
+      }
+    }
+
     // Detect OAuth token authentication failures
     if (gotError && config.oauthToken) {
       const lower = errorMessage.toLowerCase();
@@ -469,15 +545,14 @@ export function createAssistant(opts: CreateAssistantOpts): Assistant {
       }
     }
 
-    if (gotError && sessionId && !isRetry) {
-      const isResumeFail =
-        errorMessage.toLowerCase().includes('resume') || errorMessage.toLowerCase().includes('session');
-      if (isResumeFail) {
-        await clearSession(dir, sessionKey);
-        yield { type: 'warning' as const, message: 'Session could not be resumed. Starting fresh conversation.' };
-        yield* doChat(message, sessionKey, true, controller, images, files);
-      }
-    }
+    yield buildCompletionEvent({
+      fullReply,
+      doneEvt,
+      gotError,
+      errorMessage,
+      signal: controller.signal,
+      sessionId: lastSessionId,
+    });
   }
 
   async function* chatImpl(
@@ -496,10 +571,9 @@ export function createAssistant(opts: CreateAssistantOpts): Assistant {
     activeChatCount++;
     if (activeChatCount > maxConcurrent) {
       activeChatCount--;
-      yield {
-        type: 'error',
-        message: `Server busy: too many concurrent requests (limit: ${maxConcurrent}). Try again later.`,
-      };
+      const message = `Server busy: too many concurrent requests (limit: ${maxConcurrent}). Try again later.`;
+      yield { type: 'error', message };
+      yield { type: 'completion', status: 'failed', message };
       return;
     }
 
@@ -507,10 +581,9 @@ export function createAssistant(opts: CreateAssistantOpts): Assistant {
     const acquired = await mutex.tryAcquire(sessionKey, maxQueuePerSession);
     if (!acquired) {
       activeChatCount--;
-      yield {
-        type: 'error',
-        message: `Too many pending requests for this session (limit: ${maxQueuePerSession}). Try again later.`,
-      };
+      const message = `Too many pending requests for this session (limit: ${maxQueuePerSession}). Try again later.`;
+      yield { type: 'error', message };
+      yield { type: 'completion', status: 'failed', message };
       return;
     }
 
@@ -519,6 +592,10 @@ export function createAssistant(opts: CreateAssistantOpts): Assistant {
       activeRuns.set(sessionKey, { controller });
       try {
         yield* doChat(message, sessionKey, false, controller, images, files);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        yield { type: 'error', message };
+        yield { type: 'completion', status: 'failed', message };
       } finally {
         const active = activeRuns.get(sessionKey);
         if (active?.controller === controller) activeRuns.delete(sessionKey);

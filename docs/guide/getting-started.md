@@ -76,7 +76,7 @@ This opens an interactive REPL. Type your message and press Enter. The Coding Ag
 - `/skill` — list installed skills
 - `/cron` — manage scheduled tasks (list, run, enable, disable, history)
 - `/stop` — cancel the current running task
-- `/reset` — clear the current session
+- `/reset` — clear the current session and history
 - `/quit` or `/exit` — exit
 
 ### Start the Gateway Service

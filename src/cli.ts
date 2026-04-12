@@ -307,6 +307,7 @@ program
         try {
           spinner.start();
           let printedText = false;
+          let printedError = false;
           for await (const event of assistant.chat(userMessage)) {
             switch (event.type) {
               case 'text':
@@ -330,6 +331,7 @@ program
                 break;
               case 'error':
                 spinner.stop();
+                printedError = true;
                 console.error(`\n❌ ${event.message}`);
                 break;
               case 'done': {
@@ -345,6 +347,21 @@ program
                   process.stdout.write(`\n${DIM}(${parts.join(' | ')})${RESET}\n`);
                 } else {
                   process.stdout.write('\n');
+                }
+                break;
+              }
+              case 'completion': {
+                spinner.stop();
+                if (event.status === 'completed' && !printedText) {
+                  printedText = true;
+                  process.stdout.write(event.finalText);
+                } else if (event.status === 'failed' && !printedError) {
+                  printedError = true;
+                  console.error(`\n❌ ${event.message}`);
+                } else if (event.status === 'aborted' && !printedError) {
+                  printedError = true;
+                  const detail = event.reason === 'user' ? 'Task stopped by user.' : 'Task timed out.';
+                  console.error(`\n❌ ${detail}`);
                 }
                 break;
               }

@@ -92,6 +92,8 @@ golembot skill search "data analysis"  # browse community skills
 
 Need to interrupt a long-running task? Use `/stop` in REPL or IM, or call `POST /abort` in the [HTTP API](/api/http-api#post-abort).
 
+Across REPL, HTTP, and IM gateway paths, GolemBot now normalizes each turn into one terminal [`completion` event](/api/stream-events) so downstream delivery does not depend on engine-specific end-of-stream quirks.
+
 Or use as a library — 5 lines of code:
 
 ```typescript
