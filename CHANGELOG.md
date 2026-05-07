@@ -1,3 +1,10 @@
+# [0.47.0](https://github.com/0xranx/golembot/compare/v0.46.0...v0.47.0) (2026-05-07)
+
+
+### Features
+
+* support Lark global domain ([3257051](https://github.com/0xranx/golembot/commit/325705198beac82ca693b5702167e12c4dad543e))
+
 # [0.46.0](https://github.com/0xranx/golembot/compare/v0.45.3...v0.46.0) (2026-04-12)
 
 
