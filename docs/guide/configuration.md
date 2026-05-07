@@ -106,6 +106,8 @@ channels:
   feishu:
     appId: ${FEISHU_APP_ID}
     appSecret: ${FEISHU_APP_SECRET}
+    # Optional: set to lark for Lark global tenants
+    # domain: lark
   dingtalk:
     clientId: ${DINGTALK_CLIENT_ID}
     clientSecret: ${DINGTALK_CLIENT_SECRET}
@@ -466,7 +468,7 @@ interface GolemConfig {
     };
   }>;
   channels?: {
-    feishu?: { appId: string; appSecret: string };
+    feishu?: { appId: string; appSecret: string; domain?: string };
     dingtalk?: { clientId: string; clientSecret: string };
     wecom?: {
       botId: string; secret: string; websocketUrl?: string;

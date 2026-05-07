@@ -8,9 +8,9 @@ Connect your GolemBot assistant to Feishu (Lark) using WebSocket long-connection
 pnpm add @larksuiteoapi/node-sdk
 ```
 
-## Feishu Open Platform Setup
+## Feishu / Lark Open Platform Setup
 
-1. Go to [Feishu Open Platform](https://open.feishu.cn/) and create a new app
+1. Go to [Feishu Open Platform](https://open.feishu.cn/) or [Lark Developer Console](https://open.larksuite.com/) and create a new app
 2. Under **Credentials**, copy the **App ID** and **App Secret**
 3. Under **Event Subscriptions**:
    - Enable the **WebSocket** connection mode
@@ -42,6 +42,8 @@ channels:
   feishu:
     appId: ${FEISHU_APP_ID}
     appSecret: ${FEISHU_APP_SECRET}
+    # Optional. Use "lark" for Lark global tenants.
+    # domain: lark
 ```
 
 ```sh
@@ -56,6 +58,7 @@ FEISHU_APP_SECRET=xxxxxxxxxxxxxxxxxx
 |-------|------|---------|-------------|
 | `appId` | `string` | — | Feishu App ID (required) |
 | `appSecret` | `string` | — | Feishu App Secret (required) |
+| `domain` | `feishu` \| `lark` \| URL | `feishu` | Open platform domain. Set to `lark` for `open.larksuite.com` |
 
 The adapter automatically detects whether the AI reply contains Markdown formatting:
 
@@ -66,7 +69,7 @@ Standard Markdown syntax is automatically converted — no configuration needed.
 
 ## How It Works
 
-- **Transport**: WebSocket long-connection via `WSClient` from `@larksuiteoapi/node-sdk`
+- **Transport**: WebSocket long-connection via `WSClient` from `@larksuiteoapi/node-sdk`, using the configured OpenAPI domain
 - **Events**: Listens for `im.message.receive_v1` events and handles `text`, `image`, `post`, `file`, and `audio` messages
 - **Reply**: Sends messages via `client.im.v1.message.create()` — format is auto-selected based on content
 - **Chat types**: Supports both DMs and group chats
@@ -96,6 +99,7 @@ This is a passive tracking feature — it tells you when users have seen your bo
 ## Notes
 
 - WebSocket mode means the bot works behind NAT/firewalls without port forwarding
+- Lark global tenants should set `channels.feishu.domain: lark`; the adapter will use `https://open.larksuite.com` for both SDK and raw REST calls
 - Incoming images are downloaded and forwarded as `images`; files and audio are forwarded as `files`
 - `post` messages keep their text content and also download inline images when present
 - The adapter automatically handles connection lifecycle

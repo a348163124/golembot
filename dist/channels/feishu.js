@@ -1,5 +1,25 @@
 import { importPeer } from '../peer-require.js';
 import { hasMarkdown, markdownToCard } from './feishu-format.js';
+const FEISHU_OPEN_API_BASE_URL = 'https://open.feishu.cn';
+const LARK_OPEN_API_BASE_URL = 'https://open.larksuite.com';
+export function resolveFeishuOpenApiBaseUrl(domain) {
+    const rawDomain = domain?.trim();
+    const normalizedDomain = rawDomain?.toLowerCase();
+    if (!normalizedDomain || normalizedDomain === 'feishu')
+        return FEISHU_OPEN_API_BASE_URL;
+    if (normalizedDomain === 'lark' || normalizedDomain === 'larksuite')
+        return LARK_OPEN_API_BASE_URL;
+    if (rawDomain && /^https?:\/\//i.test(rawDomain))
+        return rawDomain.replace(/\/+$/, '');
+    throw new Error(`Invalid channels.feishu.domain: ${domain}. Use "feishu", "lark", or a full https:// OpenAPI base URL.`);
+}
+export function buildFeishuClientConfig(config) {
+    return {
+        appId: config.appId,
+        appSecret: config.appSecret,
+        domain: resolveFeishuOpenApiBaseUrl(config.domain),
+    };
+}
 /** Detect image MIME type from magic bytes. */
 function detectImageMime(data) {
     if (data[0] === 0x89 && data[1] === 0x50)
@@ -17,6 +37,7 @@ export class FeishuAdapter {
     maxMessageLength = 4000;
     readReceiptHandler;
     config;
+    openApiBaseUrl;
     client;
     wsClient;
     /** Bot's own open_id — resolved lazily on first group message, used for self-filtering. */
@@ -31,6 +52,10 @@ export class FeishuAdapter {
     static MEMBER_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
     constructor(config) {
         this.config = config;
+        this.openApiBaseUrl = buildFeishuClientConfig(config).domain;
+    }
+    openApiUrl(path) {
+        return `${this.openApiBaseUrl}${path.startsWith('/') ? path : `/${path}`}`;
     }
     async resolveUserName(openId) {
         const cached = this.userNameCache.get(openId);
@@ -38,7 +63,7 @@ export class FeishuAdapter {
             return cached;
         try {
             const token = await this.client.tokenManager.getTenantAccessToken();
-            const resp = await fetch(`https://open.feishu.cn/open-apis/contact/v3/users/${openId}?user_id_type=open_id`, {
+            const resp = await fetch(this.openApiUrl(`/open-apis/contact/v3/users/${openId}?user_id_type=open_id`), {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const json = (await resp.json());
@@ -57,7 +82,7 @@ export class FeishuAdapter {
      */
     async downloadImage(messageId, imageKey) {
         const token = await this.client.tokenManager.getTenantAccessToken();
-        const resp = await fetch(`https://open.feishu.cn/open-apis/im/v1/messages/${messageId}/resources/${imageKey}?type=image`, { headers: { Authorization: `Bearer ${token}` } });
+        const resp = await fetch(this.openApiUrl(`/open-apis/im/v1/messages/${messageId}/resources/${imageKey}?type=image`), { headers: { Authorization: `Bearer ${token}` } });
         if (!resp.ok) {
             throw new Error(`Feishu image download failed: ${resp.status} ${resp.statusText}`);
         }
@@ -72,7 +97,9 @@ export class FeishuAdapter {
      */
     async downloadFile(messageId, fileKey, fileName) {
         const token = await this.client.tokenManager.getTenantAccessToken();
-        const resp = await fetch(`https://open.feishu.cn/open-apis/im/v1/messages/${messageId}/resources/${fileKey}?type=file`, { headers: { Authorization: `Bearer ${token}` } });
+        const resp = await fetch(this.openApiUrl(`/open-apis/im/v1/messages/${messageId}/resources/${fileKey}?type=file`), {
+            headers: { Authorization: `Bearer ${token}` },
+        });
         if (!resp.ok) {
             throw new Error(`Feishu file download failed: ${resp.status} ${resp.statusText}`);
         }
@@ -89,10 +116,7 @@ export class FeishuAdapter {
         catch {
             throw new Error('Feishu adapter requires @larksuiteoapi/node-sdk. Install it: npm install @larksuiteoapi/node-sdk');
         }
-        const baseConfig = {
-            appId: this.config.appId,
-            appSecret: this.config.appSecret,
-        };
+        const baseConfig = buildFeishuClientConfig(this.config);
         this.client = new lark.Client(baseConfig);
         // Bot's own open_id — fetched lazily via raw HTTP (client.bot namespace doesn't exist in SDK).
         // Stored as class property so fetchHistory() can also use it for self-filtering.
@@ -101,7 +125,7 @@ export class FeishuAdapter {
                 return this.botOpenId;
             try {
                 const token = await this.client.tokenManager.getTenantAccessToken();
-                const resp = await fetch('https://open.feishu.cn/open-apis/bot/v3/info', {
+                const resp = await fetch(this.openApiUrl('/open-apis/bot/v3/info'), {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 const json = (await resp.json());
@@ -338,7 +362,7 @@ export class FeishuAdapter {
             const members = new Map();
             let pageToken;
             do {
-                const url = new URL(`https://open.feishu.cn/open-apis/im/v1/chats/${chatId}/members`);
+                const url = new URL(this.openApiUrl(`/open-apis/im/v1/chats/${chatId}/members`));
                 url.searchParams.set('member_id_type', 'open_id');
                 if (pageToken)
                     url.searchParams.set('page_token', pageToken);
@@ -427,7 +451,7 @@ export class FeishuAdapter {
      */
     async resolveMentioned(token, messageId) {
         try {
-            const resp = await fetch(`https://open.feishu.cn/open-apis/im/v1/messages/${messageId}`, {
+            const resp = await fetch(this.openApiUrl(`/open-apis/im/v1/messages/${messageId}`), {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const json = (await resp.json());
@@ -449,7 +473,7 @@ export class FeishuAdapter {
         // Feishu expects timestamps in seconds (string)
         const startTime = Math.floor(since.getTime() / 1000).toString();
         outer: do {
-            const url = new URL('https://open.feishu.cn/open-apis/im/v1/messages');
+            const url = new URL(this.openApiUrl('/open-apis/im/v1/messages'));
             url.searchParams.set('container_id_type', 'chat');
             url.searchParams.set('container_id', chatId);
             url.searchParams.set('start_time', startTime);
@@ -543,7 +567,7 @@ export class FeishuAdapter {
         const chats = [];
         let pageToken;
         do {
-            const url = new URL('https://open.feishu.cn/open-apis/im/v1/chats');
+            const url = new URL(this.openApiUrl('/open-apis/im/v1/chats'));
             if (pageToken)
                 url.searchParams.set('page_token', pageToken);
             const resp = await fetch(url.toString(), {

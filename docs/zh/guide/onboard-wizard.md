@@ -60,7 +60,7 @@ golembot onboard --template customer-support
 
 为每个选中的通道填写所需凭据：
 
-- **飞书**：App ID + App Secret
+- **飞书 / Lark**：开放平台域名 + App ID + App Secret
 - **钉钉**：Client ID + Client Secret
 - **企业微信**：Corp ID + Agent ID + Secret + Token + Encoding AES Key
 - **Slack**：Bot Token + App-Level Token

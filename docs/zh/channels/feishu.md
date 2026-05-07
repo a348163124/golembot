@@ -1,6 +1,6 @@
-# 飞书
+# 飞书（Lark）
 
-通过 WebSocket 长连接模式将 GolemBot 助手接入飞书。无需公网 IP。
+通过 WebSocket 长连接模式将 GolemBot 助手接入飞书或 Lark。无需公网 IP。
 
 ## 前置条件
 
@@ -8,9 +8,9 @@
 pnpm add @larksuiteoapi/node-sdk
 ```
 
-## 飞书开放平台配置
+## 飞书 / Lark 开放平台配置
 
-1. 前往[飞书开放平台](https://open.feishu.cn/)，创建一个新应用
+1. 前往[飞书开放平台](https://open.feishu.cn/)或 [Lark Developer Console](https://open.larksuite.com/)，创建一个新应用
 2. 在**凭证与基础信息**中，复制 **App ID** 和 **App Secret**
 3. 在**事件订阅**中：
    - 启用 **WebSocket** 连接模式
@@ -42,6 +42,8 @@ channels:
   feishu:
     appId: ${FEISHU_APP_ID}
     appSecret: ${FEISHU_APP_SECRET}
+    # 可选。Lark 国际版租户设置为 lark。
+    # domain: lark
 ```
 
 ```sh
@@ -56,6 +58,7 @@ FEISHU_APP_SECRET=xxxxxxxxxxxxxxxxxx
 |------|------|--------|------|
 | `appId` | `string` | — | 飞书 App ID（必填） |
 | `appSecret` | `string` | — | 飞书 App Secret（必填） |
+| `domain` | `feishu` \| `lark` \| URL | `feishu` | 开放平台域名。Lark 国际版设置为 `lark` |
 
 适配器自动检测 AI 回复是否包含 Markdown 格式：
 
@@ -66,7 +69,7 @@ FEISHU_APP_SECRET=xxxxxxxxxxxxxxxxxx
 
 ## 工作原理
 
-- **传输**：通过 `@larksuiteoapi/node-sdk` 的 `WSClient` 建立 WebSocket 长连接
+- **传输**：通过 `@larksuiteoapi/node-sdk` 的 `WSClient` 建立 WebSocket 长连接，并使用配置的开放平台域名
 - **事件**：监听 `im.message.receive_v1` 事件，处理 `text`、`image`、`post`、`file`、`audio` 五类消息
 - **回复**：通过 `client.im.v1.message.create()` 发送消息，根据内容自动选择格式
 - **聊天类型**：支持单聊（私信）和群聊
@@ -96,6 +99,7 @@ golembot gateway --verbose
 ## 说明
 
 - WebSocket 模式意味着机器人可以在 NAT/防火墙后运行，无需端口转发
+- Lark 国际版租户需要设置 `channels.feishu.domain: lark`；适配器会把 SDK 和 raw REST 请求都切到 `https://open.larksuite.com`
 - 入站图片会下载后作为 `images` 传递；文件和音频会作为 `files` 传递
 - `post` 富文本消息会保留文本内容，并在有内联图片时一并下载
 - 群聊中使用 `mention-only` 策略（默认）时，机器人只响应直接 @它 的消息（可通过 `groupPolicy` 配置）

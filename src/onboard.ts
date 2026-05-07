@@ -102,6 +102,7 @@ export function generateEnvExample(engine: string, channels: string[]): string {
     lines.push('# Feishu (Lark)');
     lines.push('# FEISHU_APP_ID=cli_xxx');
     lines.push('# FEISHU_APP_SECRET=xxx');
+    lines.push('# For Lark global tenants, set channels.feishu.domain: lark in golem.yaml');
     lines.push('');
   }
   if (channels.includes('dingtalk')) {
@@ -293,8 +294,18 @@ export async function runOnboard(opts: { dir?: string; template?: string } = {})
   const channelsConfig: ChannelsConfig = {};
 
   if (channels.includes('feishu')) {
-    console.log('\n📱 Feishu config (get credentials at: https://open.feishu.cn/app)');
+    console.log('\n📱 Feishu / Lark config');
     const feishuAnswer = await inquirer.default.prompt([
+      {
+        type: 'list',
+        name: 'domain',
+        message: 'Open platform domain:',
+        choices: [
+          { name: 'Feishu China (open.feishu.cn)', value: 'feishu' },
+          { name: 'Lark Global (open.larksuite.com)', value: 'lark' },
+        ],
+        default: 'feishu',
+      },
       { type: 'input', name: 'appId', message: 'Feishu App ID:', default: '' },
       { type: 'password', name: 'appSecret', message: 'Feishu App Secret:', mask: '*', default: '' },
     ]);
@@ -303,6 +314,7 @@ export async function runOnboard(opts: { dir?: string; template?: string } = {})
       channelsConfig.feishu = {
         appId: '${FEISHU_APP_ID}',
         appSecret: '${FEISHU_APP_SECRET}',
+        ...(feishuAnswer.domain === 'lark' ? { domain: 'lark' } : {}),
       };
       envLines.push(`FEISHU_APP_ID=${feishuAnswer.appId}`);
       envLines.push(`FEISHU_APP_SECRET=${feishuAnswer.appSecret}`);

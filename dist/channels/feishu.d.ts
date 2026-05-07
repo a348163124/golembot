@@ -1,10 +1,17 @@
 import type { ChannelAdapter, ChannelMessage, ReadReceipt, ReplyOptions } from '../channel.js';
 import type { FeishuChannelConfig } from '../workspace.js';
+export declare function resolveFeishuOpenApiBaseUrl(domain?: string): string;
+export declare function buildFeishuClientConfig(config: FeishuChannelConfig): {
+    appId: string;
+    appSecret: string;
+    domain: string;
+};
 export declare class FeishuAdapter implements ChannelAdapter {
     readonly name = "feishu";
     readonly maxMessageLength = 4000;
     readReceiptHandler?: (receipt: ReadReceipt) => void;
     private config;
+    private openApiBaseUrl;
     private client;
     private wsClient;
     /** Bot's own open_id — resolved lazily on first group message, used for self-filtering. */
@@ -18,6 +25,7 @@ export declare class FeishuAdapter implements ChannelAdapter {
     private groupMemberCacheTime;
     private static readonly MEMBER_CACHE_TTL;
     constructor(config: FeishuChannelConfig);
+    private openApiUrl;
     private resolveUserName;
     /**
      * Download an image resource from a Feishu message.

@@ -10,6 +10,33 @@ import { importPeer } from '../peer-require.js';
 import type { FeishuChannelConfig } from '../workspace.js';
 import { hasMarkdown, markdownToCard } from './feishu-format.js';
 
+const FEISHU_OPEN_API_BASE_URL = 'https://open.feishu.cn';
+const LARK_OPEN_API_BASE_URL = 'https://open.larksuite.com';
+
+export function resolveFeishuOpenApiBaseUrl(domain?: string): string {
+  const rawDomain = domain?.trim();
+  const normalizedDomain = rawDomain?.toLowerCase();
+  if (!normalizedDomain || normalizedDomain === 'feishu') return FEISHU_OPEN_API_BASE_URL;
+  if (normalizedDomain === 'lark' || normalizedDomain === 'larksuite') return LARK_OPEN_API_BASE_URL;
+  if (rawDomain && /^https?:\/\//i.test(rawDomain)) return rawDomain.replace(/\/+$/, '');
+
+  throw new Error(
+    `Invalid channels.feishu.domain: ${domain}. Use "feishu", "lark", or a full https:// OpenAPI base URL.`,
+  );
+}
+
+export function buildFeishuClientConfig(config: FeishuChannelConfig): {
+  appId: string;
+  appSecret: string;
+  domain: string;
+} {
+  return {
+    appId: config.appId,
+    appSecret: config.appSecret,
+    domain: resolveFeishuOpenApiBaseUrl(config.domain),
+  };
+}
+
 /** Detect image MIME type from magic bytes. */
 function detectImageMime(data: Buffer): string {
   if (data[0] === 0x89 && data[1] === 0x50) return 'image/png';
@@ -24,6 +51,7 @@ export class FeishuAdapter implements ChannelAdapter {
   readonly maxMessageLength = 4000;
   readReceiptHandler?: (receipt: ReadReceipt) => void;
   private config: FeishuChannelConfig;
+  private openApiBaseUrl: string;
   private client: any;
   private wsClient: any;
 
@@ -42,6 +70,11 @@ export class FeishuAdapter implements ChannelAdapter {
 
   constructor(config: FeishuChannelConfig) {
     this.config = config;
+    this.openApiBaseUrl = buildFeishuClientConfig(config).domain;
+  }
+
+  private openApiUrl(path: string): string {
+    return `${this.openApiBaseUrl}${path.startsWith('/') ? path : `/${path}`}`;
   }
 
   private async resolveUserName(openId: string): Promise<string | undefined> {
@@ -49,7 +82,7 @@ export class FeishuAdapter implements ChannelAdapter {
     if (cached) return cached;
     try {
       const token = await this.client.tokenManager.getTenantAccessToken();
-      const resp = await fetch(`https://open.feishu.cn/open-apis/contact/v3/users/${openId}?user_id_type=open_id`, {
+      const resp = await fetch(this.openApiUrl(`/open-apis/contact/v3/users/${openId}?user_id_type=open_id`), {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = (await resp.json()) as any;
@@ -68,7 +101,7 @@ export class FeishuAdapter implements ChannelAdapter {
   private async downloadImage(messageId: string, imageKey: string): Promise<ImageAttachment> {
     const token = await this.client.tokenManager.getTenantAccessToken();
     const resp = await fetch(
-      `https://open.feishu.cn/open-apis/im/v1/messages/${messageId}/resources/${imageKey}?type=image`,
+      this.openApiUrl(`/open-apis/im/v1/messages/${messageId}/resources/${imageKey}?type=image`),
       { headers: { Authorization: `Bearer ${token}` } },
     );
     if (!resp.ok) {
@@ -86,10 +119,9 @@ export class FeishuAdapter implements ChannelAdapter {
    */
   private async downloadFile(messageId: string, fileKey: string, fileName: string): Promise<FileAttachment> {
     const token = await this.client.tokenManager.getTenantAccessToken();
-    const resp = await fetch(
-      `https://open.feishu.cn/open-apis/im/v1/messages/${messageId}/resources/${fileKey}?type=file`,
-      { headers: { Authorization: `Bearer ${token}` } },
-    );
+    const resp = await fetch(this.openApiUrl(`/open-apis/im/v1/messages/${messageId}/resources/${fileKey}?type=file`), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     if (!resp.ok) {
       throw new Error(`Feishu file download failed: ${resp.status} ${resp.statusText}`);
     }
@@ -109,10 +141,7 @@ export class FeishuAdapter implements ChannelAdapter {
       );
     }
 
-    const baseConfig = {
-      appId: this.config.appId,
-      appSecret: this.config.appSecret,
-    };
+    const baseConfig = buildFeishuClientConfig(this.config);
 
     this.client = new lark.Client(baseConfig);
 
@@ -122,7 +151,7 @@ export class FeishuAdapter implements ChannelAdapter {
       if (this.botOpenId) return this.botOpenId;
       try {
         const token = await this.client.tokenManager.getTenantAccessToken();
-        const resp = await fetch('https://open.feishu.cn/open-apis/bot/v3/info', {
+        const resp = await fetch(this.openApiUrl('/open-apis/bot/v3/info'), {
           headers: { Authorization: `Bearer ${token}` },
         });
         const json = (await resp.json()) as any;
@@ -367,7 +396,7 @@ export class FeishuAdapter implements ChannelAdapter {
       let pageToken: string | undefined;
 
       do {
-        const url = new URL(`https://open.feishu.cn/open-apis/im/v1/chats/${chatId}/members`);
+        const url = new URL(this.openApiUrl(`/open-apis/im/v1/chats/${chatId}/members`));
         url.searchParams.set('member_id_type', 'open_id');
         if (pageToken) url.searchParams.set('page_token', pageToken);
 
@@ -464,7 +493,7 @@ export class FeishuAdapter implements ChannelAdapter {
    */
   private async resolveMentioned(token: string, messageId: string): Promise<boolean | undefined> {
     try {
-      const resp = await fetch(`https://open.feishu.cn/open-apis/im/v1/messages/${messageId}`, {
+      const resp = await fetch(this.openApiUrl(`/open-apis/im/v1/messages/${messageId}`), {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = (await resp.json()) as any;
@@ -485,7 +514,7 @@ export class FeishuAdapter implements ChannelAdapter {
     const startTime = Math.floor(since.getTime() / 1000).toString();
 
     outer: do {
-      const url = new URL('https://open.feishu.cn/open-apis/im/v1/messages');
+      const url = new URL(this.openApiUrl('/open-apis/im/v1/messages'));
       url.searchParams.set('container_id_type', 'chat');
       url.searchParams.set('container_id', chatId);
       url.searchParams.set('start_time', startTime);
@@ -580,7 +609,7 @@ export class FeishuAdapter implements ChannelAdapter {
     let pageToken: string | undefined;
 
     do {
-      const url = new URL('https://open.feishu.cn/open-apis/im/v1/chats');
+      const url = new URL(this.openApiUrl('/open-apis/im/v1/chats'));
       if (pageToken) url.searchParams.set('page_token', pageToken);
 
       const resp = await fetch(url.toString(), {

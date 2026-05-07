@@ -5,6 +5,8 @@ export type { ScheduledTaskDef, TaskTarget } from './scheduler.js';
 export interface FeishuChannelConfig {
     appId: string;
     appSecret: string;
+    /** Open platform domain. Use `lark` for Lark global tenants. Default: `feishu`. */
+    domain?: string;
 }
 export interface DingtalkChannelConfig {
     clientId: string;

@@ -538,7 +538,8 @@ peers) {
                     }
                     else if (event.status === 'aborted') {
                         hasError = true;
-                        lastErrorMessage = event.reason === 'user' ? 'Agent invocation stopped by user' : 'Agent invocation timed out';
+                        lastErrorMessage =
+                            event.reason === 'user' ? 'Agent invocation stopped by user' : 'Agent invocation timed out';
                         if (!fullReply.trim() && event.partialText) {
                             fullReply = event.partialText;
                             buffer = event.partialText;
@@ -618,7 +619,8 @@ peers) {
                     }
                     else if (event.status === 'aborted') {
                         hasError = true;
-                        lastErrorMessage = event.reason === 'user' ? 'Agent invocation stopped by user' : 'Agent invocation timed out';
+                        lastErrorMessage =
+                            event.reason === 'user' ? 'Agent invocation stopped by user' : 'Agent invocation timed out';
                         if (!fullReply.trim() && event.partialText)
                             fullReply = event.partialText;
                     }

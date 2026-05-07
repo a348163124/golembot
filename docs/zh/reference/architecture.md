@@ -86,6 +86,7 @@ channels:
   feishu:
     appId: ${FEISHU_APP_ID}
     appSecret: ${FEISHU_APP_SECRET}
+    # domain: lark              # 可选，Lark 国际版租户使用
   dingtalk:
     clientId: ${DINGTALK_CLIENT_ID}
     clientSecret: ${DINGTALK_CLIENT_SECRET}

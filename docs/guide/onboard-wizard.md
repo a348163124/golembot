@@ -60,7 +60,7 @@ Multi-select which IM platforms to connect (optional). All 6 platforms are suppo
 
 For each selected channel, the wizard prompts for the required credentials:
 
-- **Feishu**: App ID + App Secret
+- **Feishu / Lark**: Open platform domain + App ID + App Secret
 - **DingTalk**: Client ID + Client Secret
 - **WeCom**: Corp ID + Agent ID + Secret + Token + Encoding AES Key
 - **Slack**: Bot Token + App-Level Token

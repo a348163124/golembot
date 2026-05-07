@@ -173,6 +173,7 @@ channels:
   feishu:
     appId: ${FEISHU_APP_ID}
     appSecret: ${FEISHU_APP_SECRET}
+    # domain: lark                 # optional — Lark global tenants
   # Custom adapter — local file or npm package
   my-email:
     _adapter: ./adapters/email-adapter.js

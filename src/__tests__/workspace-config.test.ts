@@ -63,6 +63,7 @@ channels:
   feishu:
     appId: cli_xxx
     appSecret: secret_xxx
+    domain: lark
   dingtalk:
     clientId: din_xxx
     clientSecret: din_secret
@@ -77,6 +78,7 @@ gateway:
     expect(config.name).toBe('test-bot');
     expect(config.engine).toBe('claude-code');
     expect(config.channels?.feishu?.appId).toBe('cli_xxx');
+    expect(config.channels?.feishu?.domain).toBe('lark');
     expect(config.channels?.dingtalk?.clientId).toBe('din_xxx');
     expect(config.gateway?.port).toBe(4000);
     expect(config.gateway?.host).toBe('0.0.0.0');
