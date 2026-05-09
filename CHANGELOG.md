@@ -1,3 +1,10 @@
+## [0.47.1](https://github.com/0xranx/golembot/compare/v0.47.0...v0.47.1) (2026-05-09)
+
+
+### Bug Fixes
+
+* harden telegram replies and extend default timeout ([50de49d](https://github.com/0xranx/golembot/commit/50de49d3b7d32f7f0afe3a6a1e0a2189f65a5a2a))
+
 # [0.47.0](https://github.com/0xranx/golembot/compare/v0.46.0...v0.47.0) (2026-05-07)
 
 
