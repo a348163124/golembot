@@ -17,7 +17,7 @@ export interface ScheduledTaskDef {
   prompt: string;
   target?: TaskTarget;
   enabled: boolean;
-  timeout?: number; // seconds, default 300
+  timeout?: number; // seconds, default 600
 }
 
 export interface TaskTarget {

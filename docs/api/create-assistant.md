@@ -20,7 +20,7 @@ interface CreateAssistantOpts {
   apiKey?: string;              // Agent API key
   maxConcurrent?: number;       // Max parallel chats across all sessions (default: 10)
   maxQueuePerSession?: number;  // Max queued requests per sessionKey (default: 3)
-  timeoutMs?: number;           // Engine invocation timeout in ms (default: 300000)
+  timeoutMs?: number;           // Engine invocation timeout in ms (default: 600000)
 }
 ```
 
@@ -32,7 +32,7 @@ interface CreateAssistantOpts {
 | `apiKey` | `string` | No | API key passed to the engine. Alternatively set via environment variables (`CURSOR_API_KEY`, `ANTHROPIC_API_KEY`, etc.) |
 | `maxConcurrent` | `number` | No | Maximum number of parallel `chat()` calls across all sessions. Excess calls emit `type: 'error'` and then a terminal `type: 'completion'` with `status: 'failed'`. Default: `10` |
 | `maxQueuePerSession` | `number` | No | Maximum number of requests queued per `sessionKey`. When full, additional requests emit `type: 'error'` and then `type: 'completion'` with `status: 'failed'`. Default: `3` |
-| `timeoutMs` | `number` | No | Engine invocation timeout in milliseconds. Aborts the underlying CLI process, emits `type: 'error'`, and ends with `type: 'completion'` and `status: 'aborted'`. Default: `300000` (5 min). Can also be set via `timeout` in `golem.yaml` |
+| `timeoutMs` | `number` | No | Engine invocation timeout in milliseconds. Aborts the underlying CLI process, emits `type: 'error'`, and ends with `type: 'completion'` and `status: 'aborted'`. Default: `600000` (10 min). Can also be set via `timeout` in `golem.yaml` |
 
 ## Assistant Interface
 

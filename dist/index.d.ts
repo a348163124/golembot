@@ -67,7 +67,7 @@ export interface CreateAssistantOpts {
     maxConcurrent?: number;
     /** Max queued requests per session key (overrides golem.yaml). Default: 3. */
     maxQueuePerSession?: number;
-    /** Agent invocation timeout in ms (overrides golem.yaml timeout field). Default: 300000. */
+    /** Agent invocation timeout in ms (overrides golem.yaml timeout field). Default: 600000. */
     timeoutMs?: number;
 }
 export declare function createAssistant(opts: CreateAssistantOpts): Assistant;

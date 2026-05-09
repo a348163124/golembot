@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { BASE_CSS, DOCS_BASE, ENGINE_COLORS, esc, FAVICON, formatUptime } from './ui-shared.js';
+import { DEFAULT_TIMEOUT_SECONDS } from './workspace.js';
 export function createMetrics() {
     return {
         totalMessages: 0,
@@ -246,7 +247,7 @@ function renderConfigPanel(data) {
     <div class="config-row"><span class="config-key">Engine</span>${editable(configVal(data.engine), 'engine', data.engine, 'select', ['cursor', 'claude-code', 'opencode', 'codex'])}</div>
     <div class="config-row"><span class="config-key">Model</span>${editable(configVal(data.model, 'default'), 'model', data.model)}</div>
     <div class="config-row"><span class="config-key">Skip Permissions</span>${editable(configBadge(cfg.skipPermissions), 'skipPermissions', cfg.skipPermissions ?? false, 'boolean')}</div>
-    <div class="config-row"><span class="config-key">Timeout</span>${editable(configVal(cfg.timeout, '300', 's'), 'timeout', cfg.timeout ?? 300, 'number')}</div>
+    <div class="config-row"><span class="config-key">Timeout</span>${editable(configVal(cfg.timeout, String(DEFAULT_TIMEOUT_SECONDS), 's'), 'timeout', cfg.timeout ?? DEFAULT_TIMEOUT_SECONDS, 'number')}</div>
     <div class="config-row"><span class="config-key">Max Concurrent</span>${editable(configVal(cfg.maxConcurrent, '10'), 'maxConcurrent', cfg.maxConcurrent ?? 10, 'number')}</div>
     <div class="config-row"><span class="config-key">Max Queue/Session</span>${editable(configVal(cfg.maxQueuePerSession, '3'), 'maxQueuePerSession', cfg.maxQueuePerSession ?? 3, 'number')}</div>
     <div class="config-row"><span class="config-key">Session TTL</span>${editable(configVal(cfg.sessionTtlDays, '30', 'days'), 'sessionTtlDays', cfg.sessionTtlDays ?? 30, 'number')}</div>

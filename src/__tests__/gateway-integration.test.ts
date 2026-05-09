@@ -1447,6 +1447,95 @@ describe('handleMessage — full gateway pipeline', () => {
       }
     });
 
+    it('clears a temporary status when the adapter does not support status updates', async () => {
+      vi.useFakeTimers();
+      try {
+        const assistant: MockAssistant = {
+          ...mockAssistantStubs,
+          callCount: 0,
+          lastSessionKey: undefined,
+          lastPrompt: undefined,
+          async *chat(message: string, opts: { sessionKey?: string } = {}) {
+            assistant.callCount++;
+            assistant.lastPrompt = message;
+            assistant.lastSessionKey = opts.sessionKey;
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            yield { type: 'text' as const, content: 'Final answer.' };
+            yield { type: 'done' as const, sessionId: 'x' };
+          },
+        };
+        const adapter = makeMockAdapter();
+        adapter.updateStatus = undefined;
+        const msg = makeDmMsg();
+        const promise = handleMessage(msg, makeConfig(), assistant, adapter, 'telegram', false, dir);
+
+        await vi.advanceTimersByTimeAsync(1600);
+        expect(adapter.statusOps[0]).toEqual({ type: 'create', id: 'status-1', text: '⏳ thinking...' });
+
+        await vi.advanceTimersByTimeAsync(1000);
+        await promise;
+
+        expect(adapter.replies[0].text).toBe('Final answer.');
+        expect(adapter.statusOps).toEqual([
+          { type: 'create', id: 'status-1', text: '⏳ thinking...' },
+          { type: 'clear', id: 'status-1' },
+        ]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('logs chunk send success only after adapter.reply resolves', async () => {
+      const oldDebug = process.env.GOLEMBOT_DEBUG_EVENTS;
+      process.env.GOLEMBOT_DEBUG_EVENTS = '1';
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        const assistant = makeMockAssistant('hello world');
+        const adapter = makeMockAdapter(6);
+        const msg = makeDmMsg();
+
+        await handleMessage(msg, makeConfig(), assistant, adapter, 'telegram', false, dir);
+
+        const log = logSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+        expect(log).toContain('[event-debug] gateway reply chunkSent index=1/2 chars=5');
+        expect(log).toContain('[event-debug] gateway reply chunkSent index=2/2 chars=6');
+        expect(adapter.replies.map((r) => r.text)).toEqual(['hello', ' world']);
+      } finally {
+        if (oldDebug === undefined) delete process.env.GOLEMBOT_DEBUG_EVENTS;
+        else process.env.GOLEMBOT_DEBUG_EVENTS = oldDebug;
+        logSpy.mockRestore();
+      }
+    });
+
+    it('logs failed chunk index before the gateway error fallback', async () => {
+      const oldDebug = process.env.GOLEMBOT_DEBUG_EVENTS;
+      process.env.GOLEMBOT_DEBUG_EVENTS = '1';
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const assistant = makeMockAssistant('reply text');
+        const adapter = makeMockAdapter();
+        adapter.reply = vi.fn(async () => {
+          throw new Error('telegram send failed');
+        });
+        const msg = makeDmMsg();
+
+        await handleMessage(msg, makeConfig(), assistant, adapter, 'telegram', false, dir);
+
+        const log = logSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+        expect(log).toContain('[event-debug] gateway reply chunkFailed index=1/1');
+        expect(log).toContain('reason=telegram send failed');
+        expect(errorSpy.mock.calls.map((call) => call.join(' ')).join('\n')).toContain(
+          'Failed to send reply chunk 1/1',
+        );
+      } finally {
+        if (oldDebug === undefined) delete process.env.GOLEMBOT_DEBUG_EVENTS;
+        else process.env.GOLEMBOT_DEBUG_EVENTS = oldDebug;
+        logSpy.mockRestore();
+        errorSpy.mockRestore();
+      }
+    });
+
     it('updates a single status message across multiple tool calls', async () => {
       const assistant = makeStreamingAssistant([
         { type: 'tool_call', name: 'read', args: '{"filePath":"/tmp/a.txt"}' },

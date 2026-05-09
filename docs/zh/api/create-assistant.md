@@ -20,7 +20,7 @@ interface CreateAssistantOpts {
   apiKey?: string;              // Agent API Key
   maxConcurrent?: number;       // 全局最大并发 chat() 数（默认：10）
   maxQueuePerSession?: number;  // 每个 sessionKey 最大排队数（默认：3）
-  timeoutMs?: number;           // 引擎调用超时毫秒数（默认：300000）
+  timeoutMs?: number;           // 引擎调用超时毫秒数（默认：600000）
 }
 ```
 
@@ -32,7 +32,7 @@ interface CreateAssistantOpts {
 | `apiKey` | `string` | 否 | 传给底层引擎的 API Key |
 | `maxConcurrent` | `number` | 否 | 全局最大并发 chat 数。超出时会先产出 `error`，再以 `completion: failed` 收尾。默认 `10` |
 | `maxQueuePerSession` | `number` | 否 | 每个 `sessionKey` 的最大排队数。超出时会先产出 `error`，再以 `completion: failed` 收尾。默认 `3` |
-| `timeoutMs` | `number` | 否 | 引擎调用超时毫秒数。超时会中断底层 CLI，先产出 `error`，最后以 `completion: aborted` 收尾。默认 `300000` |
+| `timeoutMs` | `number` | 否 | 引擎调用超时毫秒数。超时会中断底层 CLI，先产出 `error`，最后以 `completion: aborted` 收尾。默认 `600000`（10 分钟） |
 
 ## Assistant 接口
 

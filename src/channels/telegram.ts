@@ -3,6 +3,18 @@ import { importPeer } from '../peer-require.js';
 import type { TelegramChannelConfig } from '../workspace.js';
 import { markdownToHtml } from './telegram-format.js';
 
+type TelegramSendMode = 'html' | 'plain';
+
+interface TelegramSendOptions {
+  chatId: number;
+  text: string;
+  mode: TelegramSendMode;
+  replyToMessageId?: number;
+  purpose: 'reply' | 'send' | 'status';
+}
+
+const TRANSIENT_RETRY_DELAYS_MS = [500, 1500] as const;
+
 export class TelegramAdapter implements ChannelAdapter {
   readonly name = 'telegram';
   readonly maxMessageLength = 4096;
@@ -114,17 +126,48 @@ export class TelegramAdapter implements ChannelAdapter {
 
   async reply(msg: ChannelMessage, text: string, _options?: ReplyOptions): Promise<void> {
     if (!this.bot) return;
-    await this.bot.api.sendMessage(Number(msg.chatId), markdownToHtml(text), {
-      parse_mode: 'HTML',
-      ...(msg.messageId ? { reply_to_message_id: Number(msg.messageId) } : {}),
+    await this.sendTelegramMessage({
+      chatId: Number(msg.chatId),
+      text,
+      mode: 'html',
+      replyToMessageId: parseTelegramMessageId(msg.messageId),
+      purpose: 'reply',
     });
   }
 
   async send(chatId: string, text: string): Promise<void> {
     if (!this.bot) return;
-    await this.bot.api.sendMessage(Number(chatId), markdownToHtml(text), {
-      parse_mode: 'HTML',
+    await this.sendTelegramMessage({
+      chatId: Number(chatId),
+      text,
+      mode: 'html',
+      purpose: 'send',
     });
+  }
+
+  async sendStatus(msg: ChannelMessage, text: string): Promise<string> {
+    if (!this.bot) return '';
+    const sent = await this.sendTelegramMessage({
+      chatId: Number(msg.chatId),
+      text,
+      mode: 'plain',
+      replyToMessageId: parseTelegramMessageId(msg.messageId),
+      purpose: 'status',
+    });
+    return String(sent?.message_id ?? '');
+  }
+
+  async clearStatus(msg: ChannelMessage, statusId: string): Promise<void> {
+    if (!this.bot || !statusId) return;
+    const messageId = parseTelegramMessageId(statusId);
+    if (messageId === undefined) return;
+    try {
+      await this.bot.api.deleteMessage(Number(msg.chatId), messageId);
+    } catch (e) {
+      console.warn(
+        `[telegram] clearStatus failed: chat=${msg.chatId} status=${statusId} reason=${describeTelegramError(e)}`,
+      );
+    }
   }
 
   async typing(msg: ChannelMessage): Promise<void> {
@@ -138,4 +181,138 @@ export class TelegramAdapter implements ChannelAdapter {
       this.bot = null;
     }
   }
+
+  private async sendTelegramMessage(options: TelegramSendOptions): Promise<any> {
+    let mode = options.mode;
+    let replyToMessageId = options.replyToMessageId;
+    let transientRetries = 0;
+    let rateLimitRetries = 0;
+    let attempt = 0;
+
+    while (true) {
+      attempt++;
+      const sendOptions: Record<string, unknown> = {};
+      if (mode === 'html') sendOptions.parse_mode = 'HTML';
+      if (replyToMessageId !== undefined) sendOptions.reply_to_message_id = replyToMessageId;
+
+      try {
+        return await this.bot.api.sendMessage(
+          options.chatId,
+          mode === 'html' ? markdownToHtml(options.text) : options.text,
+          sendOptions,
+        );
+      } catch (e) {
+        if (mode === 'html' && isTelegramParseError(e)) {
+          console.warn(this.formatSendLog('fallback=plain', options, attempt, e, replyToMessageId));
+          mode = 'plain';
+          continue;
+        }
+
+        if (replyToMessageId !== undefined && isTelegramReplyTargetError(e)) {
+          console.warn(this.formatSendLog('fallback=no-reply', options, attempt, e, replyToMessageId));
+          replyToMessageId = undefined;
+          continue;
+        }
+
+        const retryAfterMs = getTelegramRetryAfterMs(e);
+        if (retryAfterMs !== undefined && rateLimitRetries < 1) {
+          rateLimitRetries++;
+          console.warn(
+            this.formatSendLog(`retry=rate-limit delayMs=${retryAfterMs}`, options, attempt, e, replyToMessageId),
+          );
+          await sleep(retryAfterMs);
+          continue;
+        }
+
+        if (isTransientTelegramError(e) && transientRetries < TRANSIENT_RETRY_DELAYS_MS.length) {
+          const delayMs = TRANSIENT_RETRY_DELAYS_MS[transientRetries++];
+          console.warn(this.formatSendLog(`retry=transient delayMs=${delayMs}`, options, attempt, e, replyToMessageId));
+          await sleep(delayMs);
+          continue;
+        }
+
+        console.warn(this.formatSendLog('failed', options, attempt, e, replyToMessageId));
+        throw e;
+      }
+    }
+  }
+
+  private formatSendLog(
+    action: string,
+    options: TelegramSendOptions,
+    attempt: number,
+    error: unknown,
+    replyToMessageId?: number,
+  ): string {
+    return [
+      `[telegram] sendMessage ${action}`,
+      `purpose=${options.purpose}`,
+      `chat=${options.chatId}`,
+      `replyTo=${replyToMessageId ?? '-'}`,
+      `attempt=${attempt}`,
+      `reason=${describeTelegramError(error)}`,
+    ].join(' ');
+  }
+}
+
+function parseTelegramMessageId(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function describeTelegramError(error: unknown): string {
+  const e = error as {
+    code?: string;
+    error_code?: number;
+    description?: string;
+    message?: string;
+    parameters?: { retry_after?: number };
+  };
+  const code = e.error_code ?? e.code ?? 'unknown';
+  const description = e.description ?? e.message ?? String(error);
+  return `${code}:${description.replace(/\s+/g, ' ').slice(0, 180)}`;
+}
+
+function getTelegramErrorText(error: unknown): string {
+  const e = error as { description?: string; message?: string; code?: string; error_code?: number };
+  return `${e.error_code ?? ''} ${e.code ?? ''} ${e.description ?? ''} ${e.message ?? ''}`.toLowerCase();
+}
+
+function isTelegramParseError(error: unknown): boolean {
+  return /parse entities|can't parse|unsupported start tag|can't find end tag|entity/.test(getTelegramErrorText(error));
+}
+
+function isTelegramReplyTargetError(error: unknown): boolean {
+  return /reply message not found|message to be replied not found|replied message not found|reply_to_message_id|message thread not found/.test(
+    getTelegramErrorText(error),
+  );
+}
+
+function getTelegramRetryAfterMs(error: unknown): number | undefined {
+  const e = error as { error_code?: number; parameters?: { retry_after?: number } };
+  const retryAfter = e.parameters?.retry_after;
+  if (typeof retryAfter === 'number' && Number.isFinite(retryAfter)) {
+    return Math.max(100, retryAfter * 1000);
+  }
+  if (e.error_code === 429 || /too many requests|retry after/.test(getTelegramErrorText(error))) {
+    return 1000;
+  }
+  return undefined;
+}
+
+function isTransientTelegramError(error: unknown): boolean {
+  const e = error as { error_code?: number; code?: string };
+  if (typeof e.error_code === 'number' && e.error_code >= 500) return true;
+  if (
+    e.code &&
+    ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'UND_ERR_SOCKET'].includes(e.code)
+  ) {
+    return true;
+  }
+  return /fetch failed|network|socket hang up|terminated|timeout/.test(getTelegramErrorText(error));
 }

@@ -17,6 +17,7 @@ import {
 } from './session.js';
 import { daysUntilExpiry, ensureTokenMeta } from './token-meta.js';
 import {
+  DEFAULT_TIMEOUT_SECONDS,
   ensureReady,
   type GolemConfig,
   initWorkspace,
@@ -184,7 +185,7 @@ export interface CreateAssistantOpts {
   maxConcurrent?: number;
   /** Max queued requests per session key (overrides golem.yaml). Default: 3. */
   maxQueuePerSession?: number;
-  /** Agent invocation timeout in ms (overrides golem.yaml timeout field). Default: 300000. */
+  /** Agent invocation timeout in ms (overrides golem.yaml timeout field). Default: 600000. */
   timeoutMs?: number;
 }
 
@@ -407,7 +408,7 @@ export function createAssistant(opts: CreateAssistantOpts): Assistant {
     }
 
     // Timeout via AbortController
-    const timeoutMs = timeoutMsOpt ?? (config.timeout ? config.timeout * 1000 : 300_000);
+    const timeoutMs = timeoutMsOpt ?? (config.timeout ? config.timeout * 1000 : DEFAULT_TIMEOUT_SECONDS * 1000);
     const timer = setTimeout(() => controller.abort('timeout'), timeoutMs);
 
     // Write user turn to history

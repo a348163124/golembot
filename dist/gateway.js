@@ -14,7 +14,7 @@ import { Scheduler } from './scheduler.js';
 import { SeenMessageStore } from './seen-messages.js';
 import { createGolemServer } from './server.js';
 import { TaskStore } from './task-store.js';
-import { loadConfig, scanSkills, } from './workspace.js';
+import { DEFAULT_TIMEOUT_SECONDS, loadConfig, scanSkills, } from './workspace.js';
 export function splitMessage(text, maxLen) {
     if (text.length <= maxLen)
         return [text];
@@ -380,11 +380,11 @@ peers) {
             return;
         cancelThinkingStatus();
         debugEventLog(debugEventsEnabled, `[event-debug] gateway status textChars=${text.trim().length} hasStatus=${!!statusMessageId}`);
-        if (adapter.sendStatus && adapter.updateStatus && adapter.clearStatus) {
+        if (adapter.sendStatus && adapter.clearStatus) {
             if (!statusMessageId) {
                 statusMessageId = await adapter.sendStatus(msg, text.trim());
             }
-            else {
+            else if (adapter.updateStatus) {
                 await adapter.updateStatus(msg, statusMessageId, text.trim());
             }
             statusMessageText = text.trim();
@@ -446,8 +446,17 @@ peers) {
             }
         }
         const replyOpts = mentions.length > 0 ? { mentions } : undefined;
-        for (const chunk of chunks) {
-            await adapter.reply(msg, chunk, replyOpts);
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
+            try {
+                await adapter.reply(msg, chunk, replyOpts);
+                debugEventLog(debugEventsEnabled, `[event-debug] gateway reply chunkSent index=${i + 1}/${chunks.length} chars=${chunk.length}`);
+            }
+            catch (e) {
+                const reason = e instanceof Error ? e.message : String(e);
+                debugEventLog(debugEventsEnabled, `[event-debug] gateway reply chunkFailed index=${i + 1}/${chunks.length} chars=${chunk.length} reason=${reason}`);
+                throw new Error(`Failed to send reply chunk ${i + 1}/${chunks.length}: ${reason}`, { cause: e });
+            }
         }
         // Stop typing indicator after first message is sent
         if (typingTimer !== undefined) {
@@ -459,7 +468,7 @@ peers) {
         let fullReply = '';
         let hasError = false;
         let lastErrorMessage = '';
-        const timeoutSeconds = config.timeout ?? 300;
+        const timeoutSeconds = config.timeout ?? DEFAULT_TIMEOUT_SECONDS;
         // When injectPass is active (smart mode, not mentioned), force buffered behavior
         // to prevent [PASS] sentinel from leaking to IM before we can detect and suppress it.
         const effectiveMode = injectPass ? 'buffered' : streamingConfig.mode;

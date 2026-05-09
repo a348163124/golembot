@@ -7,7 +7,7 @@ import { createEngine, discoverEngines } from './engine.js';
 import { compressImages } from './image-compress.js';
 import { appendHistory, clearSession, getHistoryPath, loadSession, pruneExpiredSessions, resetConversation, saveSession, } from './session.js';
 import { daysUntilExpiry, ensureTokenMeta } from './token-meta.js';
-import { ensureReady, initWorkspace, loadConfig, patchConfig, scanSkills, writeConfig, } from './workspace.js';
+import { DEFAULT_TIMEOUT_SECONDS, ensureReady, initWorkspace, loadConfig, patchConfig, scanSkills, writeConfig, } from './workspace.js';
 export { buildSessionKey, stripMention } from './channel.js';
 export { executeCommand, parseCommand } from './commands.js';
 export { claudeProviderEnv, codexProviderEnv, cursorProviderEnv, openCodeProviderEnv } from './engine.js';
@@ -268,7 +268,7 @@ export function createAssistant(opts) {
             pruneExpiredSessions(dir, config.sessionTtlDays ?? 30).catch(() => { });
         }
         // Timeout via AbortController
-        const timeoutMs = timeoutMsOpt ?? (config.timeout ? config.timeout * 1000 : 300_000);
+        const timeoutMs = timeoutMsOpt ?? (config.timeout ? config.timeout * 1000 : DEFAULT_TIMEOUT_SECONDS * 1000);
         const timer = setTimeout(() => controller.abort('timeout'), timeoutMs);
         // Write user turn to history
         await appendHistory(dir, {

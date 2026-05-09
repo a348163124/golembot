@@ -1,6 +1,6 @@
 import type { ServerResponse } from 'node:http';
 import type { TaskExecution, TaskRecord, TaskStore } from './task-store.js';
-import type { GolemConfig, PersonaConfig, SkillInfo } from './workspace.js';
+import { type GolemConfig, type PersonaConfig, type SkillInfo } from './workspace.js';
 export interface EscalationEntry {
     ts: string;
     reason: string;

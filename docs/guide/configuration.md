@@ -53,7 +53,7 @@ systemPrompt: |
   or any coding assistant. Reply in the same language the user uses.
 
 # Optional: production hardening
-timeout: 120                 # engine timeout in seconds (default: 300)
+timeout: 120                 # engine timeout in seconds (default: 600)
 maxConcurrent: 20            # max parallel chats (default: 10)
 maxQueuePerSession: 2        # max queued requests per user (default: 3)
 sessionTtlDays: 14           # prune idle sessions after N days (default: 30)
@@ -138,7 +138,7 @@ gateway:
 | `model` | `string` | — | Preferred model. Format varies by engine — see each engine's docs for valid values |
 | `skipPermissions` | `boolean` | `true` | Whether to bypass agent permission prompts |
 | `codex` | `object` | — | Codex-specific runtime options — see [`codex`](#codex) section |
-| `timeout` | `number` | `300` | Engine invocation timeout in seconds. The underlying CLI process is killed and a `type: 'error'` event is emitted |
+| `timeout` | `number` | `600` | Engine invocation timeout in seconds. The underlying CLI process is killed and a `type: 'error'` event is emitted |
 | `maxConcurrent` | `number` | `10` | Maximum number of parallel `chat()` calls across all sessions |
 | `maxQueuePerSession` | `number` | `3` | Maximum number of requests that can be queued per session key |
 | `sessionTtlDays` | `number` | `30` | Sessions not used for this many days are pruned at next startup |
@@ -436,7 +436,7 @@ interface GolemConfig {
     search?: boolean;
     addDirs?: string[];
   };
-  timeout?: number;             // seconds, default 300
+  timeout?: number;             // seconds, default 600
   maxConcurrent?: number;       // default 10
   maxQueuePerSession?: number;  // default 3
   sessionTtlDays?: number;      // default 30

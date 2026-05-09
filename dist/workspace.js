@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import yaml from 'js-yaml';
+export const DEFAULT_TIMEOUT_SECONDS = 600;
 /**
  * Recursively resolve `${ENV_VAR}` placeholders in string values.
  * Non-string values and missing env vars are left unchanged.

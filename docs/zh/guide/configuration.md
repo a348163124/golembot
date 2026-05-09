@@ -54,7 +54,7 @@ systemPrompt: |
   在 IM 场景中回复时，不要在消息中包含原始 URL。
 
 # 可选：生产可用性配置
-timeout: 120                 # 引擎超时（秒，默认：300）
+timeout: 120                 # 引擎超时（秒，默认：600）
 maxConcurrent: 20            # 最大并发 chat() 数（默认：10）
 maxQueuePerSession: 2        # 每个用户最大排队数（默认：3）
 sessionTtlDays: 14           # 闲置会话保留天数（默认：30）
@@ -139,7 +139,7 @@ gateway:
 | `model` | `string` | — | 首选模型，格式因引擎而异 — 详见各引擎文档 |
 | `skipPermissions` | `boolean` | `true` | 是否跳过 Agent 权限确认 |
 | `codex` | `object` | — | Codex 专属运行配置，详见 [`codex`](#codex) |
-| `timeout` | `number` | `300` | 引擎调用超时（秒）。超时后 CLI 进程被终止并触发 `type: 'error'` 事件 |
+| `timeout` | `number` | `600` | 引擎调用超时（秒）。超时后 CLI 进程被终止并触发 `type: 'error'` 事件 |
 | `maxConcurrent` | `number` | `10` | 全局最大并发 `chat()` 调用数 |
 | `maxQueuePerSession` | `number` | `3` | 每个 sessionKey 最大排队请求数 |
 | `sessionTtlDays` | `number` | `30` | 闲置会话超过此天数后在下次启动时清理 |
@@ -407,7 +407,7 @@ interface GolemConfig {
     search?: boolean;
     addDirs?: string[];
   };
-  timeout?: number;             // 秒，默认 300
+  timeout?: number;             // 秒，默认 600
   maxConcurrent?: number;       // 默认 10
   maxQueuePerSession?: number;  // 默认 3
   sessionTtlDays?: number;      // 默认 30

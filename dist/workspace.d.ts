@@ -2,6 +2,7 @@ import type { ScheduledTaskDef } from './scheduler.js';
 export type { HistoryFetchConfig } from './history-fetcher.js';
 export type { InboxConfig } from './inbox.js';
 export type { ScheduledTaskDef, TaskTarget } from './scheduler.js';
+export declare const DEFAULT_TIMEOUT_SECONDS = 600;
 export interface FeishuChannelConfig {
     appId: string;
     appSecret: string;
@@ -160,7 +161,7 @@ export interface GolemConfig {
     codex?: CodexConfig;
     channels?: ChannelsConfig;
     gateway?: GatewayConfig;
-    /** Agent invocation timeout in seconds. Default: 300 (5 minutes). */
+    /** Agent invocation timeout in seconds. Default: 600 (10 minutes). */
     timeout?: number;
     /** Maximum concurrent Agent invocations across all sessions. Default: 10. */
     maxConcurrent?: number;
