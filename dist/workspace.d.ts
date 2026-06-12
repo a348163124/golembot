@@ -163,6 +163,13 @@ export interface GolemConfig {
     gateway?: GatewayConfig;
     /** Agent invocation timeout in seconds. Default: 600 (10 minutes). */
     timeout?: number;
+    /**
+     * Max auto-continue relay rounds per user message (gateway/IM only).
+     * When > 0, a turn-end contract is injected so the agent signals unfinished
+     * work with a trailing [CONTINUE] line, and the gateway mechanically
+     * re-invokes it. 0 disables. Default: 5.
+     */
+    autoContinue?: number;
     /** Maximum concurrent Agent invocations across all sessions. Default: 10. */
     maxConcurrent?: number;
     /** Maximum queued requests per session key. Default: 3. */
