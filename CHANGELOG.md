@@ -1,3 +1,10 @@
+## [0.48.2](https://github.com/0xranx/golembot/compare/v0.48.1...v0.48.2) (2026-07-07)
+
+
+### Bug Fixes
+
+* **dingtalk:** download images and files via the two-step media API ([a81ab95](https://github.com/0xranx/golembot/commit/a81ab9566b5a233db81939ae9037f1ee3e834cee)), closes [#39](https://github.com/0xranx/golembot/issues/39)
+
 ## [0.48.1](https://github.com/0xranx/golembot/compare/v0.48.0...v0.48.1) (2026-07-07)
 
 
