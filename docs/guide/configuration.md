@@ -108,6 +108,8 @@ channels:
     appSecret: ${FEISHU_APP_SECRET}
     # Optional: set to lark for Lark global tenants
     # domain: lark
+    # Optional: WebSocket pong timeout in seconds
+    # pingTimeout: 30
   dingtalk:
     clientId: ${DINGTALK_CLIENT_ID}
     clientSecret: ${DINGTALK_CLIENT_SECRET}
@@ -468,7 +470,7 @@ interface GolemConfig {
     };
   }>;
   channels?: {
-    feishu?: { appId: string; appSecret: string; domain?: string };
+    feishu?: { appId: string; appSecret: string; domain?: string; pingTimeout?: number };
     dingtalk?: { clientId: string; clientSecret: string };
     wecom?: {
       botId: string; secret: string; websocketUrl?: string;

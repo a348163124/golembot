@@ -8,6 +8,8 @@ export interface FeishuChannelConfig {
     appSecret: string;
     /** Open platform domain. Use `lark` for Lark global tenants. Default: `feishu`. */
     domain?: string;
+    /** WebSocket pong timeout in seconds. Default: 30. Set 0 to disable the SDK watchdog. */
+    pingTimeout?: number;
 }
 export interface DingtalkChannelConfig {
     clientId: string;
