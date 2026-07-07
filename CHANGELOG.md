@@ -1,3 +1,10 @@
+## [0.48.1](https://github.com/0xranx/golembot/compare/v0.48.0...v0.48.1) (2026-07-07)
+
+
+### Bug Fixes
+
+* **feishu:** enable websocket ping watchdog ([0fbc9be](https://github.com/0xranx/golembot/commit/0fbc9be1174923e1bb728154f2f6f60c90bc6505))
+
 # [0.48.0](https://github.com/0xranx/golembot/compare/v0.47.1...v0.48.0) (2026-06-12)
 
 
