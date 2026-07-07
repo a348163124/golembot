@@ -14,6 +14,12 @@ export interface FeishuChannelConfig {
 export interface DingtalkChannelConfig {
     clientId: string;
     clientSecret: string;
+    /**
+     * Robot code for the media download API (POST /v1.0/robot/messageFiles/download).
+     * Defaults to the robotCode field in the message callback, falling back to clientId
+     * (they are identical for enterprise internal robots).
+     */
+    robotCode?: string;
 }
 export interface WecomChannelConfig {
     botId: string;
