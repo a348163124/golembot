@@ -346,6 +346,13 @@ export class FeishuAdapter {
         this.wsClient = new lark.WSClient({
             ...baseConfig,
             loggerLevel: lark.LoggerLevel.info,
+            wsConfig: {
+                pingTimeout: this.config.pingTimeout ?? 30,
+            },
+            onReady: () => console.log('[feishu] WS ready'),
+            onReconnecting: () => console.log('[feishu] WS reconnecting...'),
+            onReconnected: () => console.log('[feishu] WS reconnected'),
+            onError: (err) => console.error('[feishu] WS error:', err?.message ?? String(err)),
         });
         await this.wsClient.start({ eventDispatcher });
         console.log(`[feishu] WebSocket connection established`);
@@ -589,8 +596,14 @@ export class FeishuAdapter {
         return chats;
     }
     async stop() {
-        // WSClient doesn't expose a clean close method in current SDK version;
-        // setting to null allows GC to collect.
+        if (this.wsClient) {
+            try {
+                this.wsClient.close();
+            }
+            catch {
+                // best effort
+            }
+        }
         this.wsClient = null;
         this.client = null;
     }

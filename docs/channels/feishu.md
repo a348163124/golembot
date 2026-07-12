@@ -44,6 +44,8 @@ channels:
     appSecret: ${FEISHU_APP_SECRET}
     # Optional. Use "lark" for Lark global tenants.
     # domain: lark
+    # Optional. WebSocket pong timeout in seconds. Default: 30.
+    # pingTimeout: 30
 ```
 
 ```sh
@@ -59,6 +61,7 @@ FEISHU_APP_SECRET=xxxxxxxxxxxxxxxxxx
 | `appId` | `string` | — | Feishu App ID (required) |
 | `appSecret` | `string` | — | Feishu App Secret (required) |
 | `domain` | `feishu` \| `lark` \| URL | `feishu` | Open platform domain. Set to `lark` for `open.larksuite.com` |
+| `pingTimeout` | `number` | `30` | WebSocket pong timeout in seconds. Detects half-open idle connections and lets the SDK reconnect. Set `0` to disable |
 
 The adapter automatically detects whether the AI reply contains Markdown formatting:
 
@@ -69,7 +72,7 @@ Standard Markdown syntax is automatically converted — no configuration needed.
 
 ## How It Works
 
-- **Transport**: WebSocket long-connection via `WSClient` from `@larksuiteoapi/node-sdk`, using the configured OpenAPI domain
+- **Transport**: WebSocket long-connection via `WSClient` from `@larksuiteoapi/node-sdk`, using the configured OpenAPI domain and a 30s pong watchdog by default
 - **Events**: Listens for `im.message.receive_v1` events and handles `text`, `image`, `post`, `file`, and `audio` messages
 - **Reply**: Sends messages via `client.im.v1.message.create()` — format is auto-selected based on content
 - **Chat types**: Supports both DMs and group chats

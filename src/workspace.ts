@@ -14,11 +14,19 @@ export interface FeishuChannelConfig {
   appSecret: string;
   /** Open platform domain. Use `lark` for Lark global tenants. Default: `feishu`. */
   domain?: string;
+  /** WebSocket pong timeout in seconds. Default: 30. Set 0 to disable the SDK watchdog. */
+  pingTimeout?: number;
 }
 
 export interface DingtalkChannelConfig {
   clientId: string;
   clientSecret: string;
+  /**
+   * Robot code for the media download API (POST /v1.0/robot/messageFiles/download).
+   * Defaults to the robotCode field in the message callback, falling back to clientId
+   * (they are identical for enterprise internal robots).
+   */
+  robotCode?: string;
 }
 
 export interface WecomChannelConfig {
@@ -189,6 +197,13 @@ export interface GolemConfig {
   gateway?: GatewayConfig;
   /** Agent invocation timeout in seconds. Default: 600 (10 minutes). */
   timeout?: number;
+  /**
+   * Max auto-continue relay rounds per user message (gateway/IM only).
+   * When > 0, a turn-end contract is injected so the agent signals unfinished
+   * work with a trailing [CONTINUE] line, and the gateway mechanically
+   * re-invokes it. 0 disables. Default: 5.
+   */
+  autoContinue?: number;
   /** Maximum concurrent Agent invocations across all sessions. Default: 10. */
   maxConcurrent?: number;
   /** Maximum queued requests per session key. Default: 3. */
@@ -298,6 +313,7 @@ export async function loadConfig(dir: string): Promise<GolemConfig> {
     config.gateway = resolveEnvPlaceholders(doc.gateway as GatewayConfig);
   }
   if (typeof doc.timeout === 'number') config.timeout = doc.timeout;
+  if (typeof doc.autoContinue === 'number') config.autoContinue = doc.autoContinue;
   if (typeof doc.maxConcurrent === 'number') config.maxConcurrent = doc.maxConcurrent;
   if (typeof doc.maxQueuePerSession === 'number') config.maxQueuePerSession = doc.maxQueuePerSession;
   if (typeof doc.sessionTtlDays === 'number') config.sessionTtlDays = doc.sessionTtlDays;
@@ -416,6 +432,7 @@ export async function writeConfig(dir: string, config: GolemConfig): Promise<voi
   if (config.channels) content.channels = config.channels;
   if (config.gateway) content.gateway = config.gateway;
   if (typeof config.timeout === 'number') content.timeout = config.timeout;
+  if (typeof config.autoContinue === 'number') content.autoContinue = config.autoContinue;
   if (typeof config.maxConcurrent === 'number') content.maxConcurrent = config.maxConcurrent;
   if (typeof config.maxQueuePerSession === 'number') content.maxQueuePerSession = config.maxQueuePerSession;
   if (typeof config.sessionTtlDays === 'number') content.sessionTtlDays = config.sessionTtlDays;

@@ -65,6 +65,23 @@ DingTalk's Stream SDK (`TOPIC_ROBOT`) **only delivers messages where the bot is 
 For best results, use `mention-only` with DingTalk.
 :::
 
+## Images and Files
+
+The adapter downloads incoming images (picture / rich text messages) and file attachments so the agent can read them:
+
+- **Images**: saved to the workspace and referenced in the prompt; multimodal engines can view them directly
+- **Files** (PDF, HTML, code, etc.): saved to the workspace; the agent reads them with its file tools
+
+Downloads use DingTalk's two-step media API (`downloadCode` → temporary URL → bytes), which requires the robot code. For enterprise internal robots the robot code equals the Client ID and is detected automatically; override it via `robotCode` in the channel config if yours differs:
+
+```yaml
+channels:
+  dingtalk:
+    clientId: ${DINGTALK_CLIENT_ID}
+    clientSecret: ${DINGTALK_CLIENT_SECRET}
+    robotCode: ${DINGTALK_ROBOT_CODE}  # optional, defaults to clientId
+```
+
 ## Notes
 
 - Stream mode uses outbound WebSocket — works behind NAT/firewalls

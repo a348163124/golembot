@@ -6,6 +6,19 @@ import { Scheduler } from './scheduler.js';
 import { TaskStore } from './task-store.js';
 import { type GolemConfig, type GroupChatConfig, type StreamingConfig } from './workspace.js';
 export declare function splitMessage(text: string, maxLen: number): string[];
+/** Sentinel an agent appends as its own trailing line to signal unfinished work. */
+export declare const CONTINUE_SENTINEL = "[CONTINUE]";
+/** Default max auto-continue relay rounds per inbound message. */
+export declare const DEFAULT_AUTO_CONTINUE_ROUNDS = 5;
+/** Turn-end contract injected into prompts when auto-continue is enabled. */
+export declare const TURN_END_CONTRACT: string;
+/** Prompt sent for each mechanical auto-continue round. */
+export declare const AUTO_CONTINUE_PROMPT: string;
+/** Split a trailing [CONTINUE] sentinel line off a reply. */
+export declare function splitTrailingContinue(text: string): {
+    body: string;
+    hasContinue: boolean;
+};
 interface GatewayOpts {
     dir?: string;
     port?: number;
@@ -49,7 +62,9 @@ export declare function buildGroupPrompt(history: GroupMessage[], senderName: st
 /** When set, the message explicitly @mentions someone else — this bot should almost always [PASS]. */
 othersAddressed?: string[], 
 /** Other GolemBot instances discovered via fleet, for multi-bot coordination. */
-peers?: PeerBot[]): string;
+peers?: PeerBot[], 
+/** When true, inject the turn-end contract so the agent signals unfinished work with [CONTINUE]. */
+injectContinue?: boolean): string;
 export declare function requireFields(type: string, config: Record<string, unknown>, fields: string[]): void;
 /**
  * Extract @mentions from AI reply text by matching against known group members.

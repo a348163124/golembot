@@ -71,6 +71,24 @@ describe('workspace', () => {
       expect(cfg.codex).toEqual({ mode: 'safe' });
     });
 
+    it('reads autoContinue field', async () => {
+      await writeFile(join(dir, 'golem.yaml'), 'name: bot\nengine: cursor\nautoContinue: 3\n');
+      const cfg = await loadConfig(dir);
+      expect(cfg.autoContinue).toBe(3);
+    });
+
+    it('reads autoContinue: 0 (disabled) as a valid value', async () => {
+      await writeFile(join(dir, 'golem.yaml'), 'name: bot\nengine: cursor\nautoContinue: 0\n');
+      const cfg = await loadConfig(dir);
+      expect(cfg.autoContinue).toBe(0);
+    });
+
+    it('autoContinue is undefined when not set (gateway applies default)', async () => {
+      await writeFile(join(dir, 'golem.yaml'), 'name: bot\nengine: cursor\n');
+      const cfg = await loadConfig(dir);
+      expect(cfg.autoContinue).toBeUndefined();
+    });
+
     it('reads extended codex config fields', async () => {
       await writeFile(
         join(dir, 'golem.yaml'),
@@ -111,6 +129,18 @@ describe('workspace', () => {
       await writeConfig(dir, { name: 'test', engine: 'cursor' });
       const raw = await readFile(join(dir, 'golem.yaml'), 'utf-8');
       expect(raw).not.toContain('skipPermissions');
+    });
+
+    it('round-trips autoContinue (including 0)', async () => {
+      await writeConfig(dir, { name: 'test', engine: 'cursor', autoContinue: 0 });
+      const cfg = await loadConfig(dir);
+      expect(cfg.autoContinue).toBe(0);
+    });
+
+    it('omits autoContinue when undefined', async () => {
+      await writeConfig(dir, { name: 'test', engine: 'cursor' });
+      const raw = await readFile(join(dir, 'golem.yaml'), 'utf-8');
+      expect(raw).not.toContain('autoContinue');
     });
 
     it('round-trips codex config', async () => {

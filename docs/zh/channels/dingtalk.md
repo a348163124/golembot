@@ -56,6 +56,23 @@ groupChat:
 建议钉钉用户使用 `mention-only` 模式。
 :::
 
+## 图片与文件
+
+adapter 会自动下载收到的图片（图片 / 富文本消息）和文件附件，供 agent 读取：
+
+- **图片**：保存到工作区并在 prompt 中附路径；多模态引擎可直接查看
+- **文件**（PDF、HTML、代码等）：保存到工作区，agent 用文件工具读取
+
+下载走钉钉的两步媒体 API（`downloadCode` → 临时链接 → 文件字节），需要机器人编码（robotCode）。企业内部机器人的 robotCode 与 Client ID 相同，会自动识别；如不一致可在频道配置中覆盖：
+
+```yaml
+channels:
+  dingtalk:
+    clientId: ${DINGTALK_CLIENT_ID}
+    clientSecret: ${DINGTALK_CLIENT_SECRET}
+    robotCode: ${DINGTALK_ROBOT_CODE}  # 可选，默认取 clientId
+```
+
 ## 说明
 
 - Stream 模式使用出站 WebSocket — 可在 NAT/防火墙后运行

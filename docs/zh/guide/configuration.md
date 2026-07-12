@@ -109,6 +109,8 @@ channels:
     appSecret: ${FEISHU_APP_SECRET}
     # 可选：Lark 国际版租户设置为 lark
     # domain: lark
+    # 可选：WebSocket pong 超时时间，单位秒
+    # pingTimeout: 30
   dingtalk:
     clientId: ${DINGTALK_CLIENT_ID}
     clientSecret: ${DINGTALK_CLIENT_SECRET}
@@ -428,7 +430,7 @@ interface GolemConfig {
     maxTurns?: number;       // 默认：10
   };
   channels?: {
-    feishu?: { appId: string; appSecret: string; domain?: string };
+    feishu?: { appId: string; appSecret: string; domain?: string; pingTimeout?: number };
     dingtalk?: { clientId: string; clientSecret: string };
     wecom?: {
       botId: string; secret: string; websocketUrl?: string;

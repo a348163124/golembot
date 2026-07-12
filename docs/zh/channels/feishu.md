@@ -44,6 +44,8 @@ channels:
     appSecret: ${FEISHU_APP_SECRET}
     # 可选。Lark 国际版租户设置为 lark。
     # domain: lark
+    # 可选。WebSocket pong 超时时间，单位秒。默认 30。
+    # pingTimeout: 30
 ```
 
 ```sh
@@ -59,6 +61,7 @@ FEISHU_APP_SECRET=xxxxxxxxxxxxxxxxxx
 | `appId` | `string` | — | 飞书 App ID（必填） |
 | `appSecret` | `string` | — | 飞书 App Secret（必填） |
 | `domain` | `feishu` \| `lark` \| URL | `feishu` | 开放平台域名。Lark 国际版设置为 `lark` |
+| `pingTimeout` | `number` | `30` | WebSocket pong 超时时间，单位秒。用于检测空闲半开连接并触发 SDK 重连。设置为 `0` 可关闭 |
 
 适配器自动检测 AI 回复是否包含 Markdown 格式：
 
@@ -69,7 +72,7 @@ FEISHU_APP_SECRET=xxxxxxxxxxxxxxxxxx
 
 ## 工作原理
 
-- **传输**：通过 `@larksuiteoapi/node-sdk` 的 `WSClient` 建立 WebSocket 长连接，并使用配置的开放平台域名
+- **传输**：通过 `@larksuiteoapi/node-sdk` 的 `WSClient` 建立 WebSocket 长连接，并使用配置的开放平台域名；默认启用 30 秒 pong watchdog
 - **事件**：监听 `im.message.receive_v1` 事件，处理 `text`、`image`、`post`、`file`、`audio` 五类消息
 - **回复**：通过 `client.im.v1.message.create()` 发送消息，根据内容自动选择格式
 - **聊天类型**：支持单聊（私信）和群聊
