@@ -714,7 +714,7 @@ describe('handleMessage — full gateway pipeline', () => {
       const adapter = makeMockAdapter();
       const msg = makeGroupMsg({ text: '@golem explain this' });
       await handleMessage(msg, config, assistant, adapter, 'slack', false, dir);
-      expect(assistant.lastPrompt).not.toContain('[System:');
+      expect(assistant.lastPrompt).not.toContain('[PASS]');
     });
 
     it('[PASS] sentinel: adapter.reply is NOT called when agent returns [PASS]', async () => {
@@ -1920,6 +1920,284 @@ describe('handleMessage — full gateway pipeline', () => {
       const msg = makeDmMsg({ text: '' });
       await handleMessage(msg, makeConfig(), assistant, adapter, 'slack', false, dir);
       expect(assistant.callCount).toBe(0);
+    });
+  });
+});
+
+// ── Auto-continue relay ([CONTINUE] sentinel, issue #37) ─────────────────────
+
+/** Mock assistant that replies with a different scripted text per chat call (last script repeats). */
+function makeScriptedAssistant(scripts: string[]): MockAssistant & { prompts: string[] } {
+  const obj: MockAssistant & { prompts: string[] } = {
+    ...mockAssistantStubs,
+    callCount: 0,
+    prompts: [],
+    lastSessionKey: undefined,
+    lastPrompt: undefined,
+    canceledSessionKey: undefined,
+    async *chat(message: string, opts: { sessionKey?: string } = {}) {
+      const idx = obj.callCount++;
+      obj.prompts.push(message);
+      obj.lastPrompt = message;
+      obj.lastSessionKey = opts.sessionKey;
+      yield { type: 'text' as const, content: scripts[Math.min(idx, scripts.length - 1)] };
+      yield { type: 'done' as const, sessionId: 'mock-sid' };
+    },
+  };
+  return obj;
+}
+
+describe('splitTrailingContinue', () => {
+  let splitTrailingContinue: typeof import('../gateway.js').splitTrailingContinue;
+
+  beforeEach(async () => {
+    const mod = await import('../gateway.js');
+    splitTrailingContinue = mod.splitTrailingContinue;
+  });
+
+  it('detects and strips a trailing [CONTINUE] line', () => {
+    expect(splitTrailingContinue('did step 1\n[CONTINUE]')).toEqual({ body: 'did step 1', hasContinue: true });
+  });
+
+  it('handles a reply that is only the sentinel', () => {
+    expect(splitTrailingContinue('[CONTINUE]')).toEqual({ body: '', hasContinue: true });
+  });
+
+  it('tolerates trailing whitespace around the sentinel line', () => {
+    expect(splitTrailingContinue('working\n  [CONTINUE]  \n')).toEqual({ body: 'working', hasContinue: true });
+  });
+
+  it('does NOT match [CONTINUE] in the middle of text', () => {
+    const text = 'I will output [CONTINUE] when unfinished.\nAll done.';
+    expect(splitTrailingContinue(text)).toEqual({ body: text, hasContinue: false });
+  });
+
+  it('does NOT match [CONTINUE] inline at the end of a sentence line', () => {
+    const text = 'finishing up [CONTINUE]';
+    expect(splitTrailingContinue(text)).toEqual({ body: text, hasContinue: false });
+  });
+
+  it('returns text unchanged when no sentinel', () => {
+    expect(splitTrailingContinue('plain reply')).toEqual({ body: 'plain reply', hasContinue: false });
+  });
+});
+
+describe('auto-continue relay ([CONTINUE] sentinel)', () => {
+  let dir: string;
+  let handleMessage: typeof import('../gateway.js').handleMessage;
+  let groupHistories: typeof import('../gateway.js').groupHistories;
+  let groupTurnCounters: typeof import('../gateway.js').groupTurnCounters;
+  let groupLastActivity: typeof import('../gateway.js').groupLastActivity;
+  let AUTO_CONTINUE_PROMPT: string;
+  let TURN_END_CONTRACT: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'golem-ac-'));
+    const mod = await import('../gateway.js');
+    handleMessage = mod.handleMessage;
+    groupHistories = mod.groupHistories;
+    groupTurnCounters = mod.groupTurnCounters;
+    groupLastActivity = mod.groupLastActivity;
+    AUTO_CONTINUE_PROMPT = mod.AUTO_CONTINUE_PROMPT;
+    TURN_END_CONTRACT = mod.TURN_END_CONTRACT;
+    groupHistories.clear();
+    groupTurnCounters.clear();
+    groupLastActivity.clear();
+  });
+
+  afterEach(async () => {
+    groupHistories.clear();
+    groupTurnCounters.clear();
+    groupLastActivity.clear();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  // ── Contract injection ──
+
+  describe('turn-end contract injection', () => {
+    it('injects the contract into DM prompts by default', async () => {
+      const assistant = makeMockAssistant('ok');
+      const adapter = makeMockAdapter();
+      await handleMessage(makeDmMsg(), makeConfig(), assistant, adapter, 'slack', false, dir);
+      expect(assistant.lastPrompt).toContain(TURN_END_CONTRACT);
+    });
+
+    it('injects the contract into group prompts by default', async () => {
+      const assistant = makeMockAssistant('ok');
+      const adapter = makeMockAdapter();
+      await handleMessage(makeGroupMsg({ text: '@golem hi' }), makeConfig(), assistant, adapter, 'slack', false, dir);
+      expect(assistant.lastPrompt).toContain(TURN_END_CONTRACT);
+    });
+
+    it('does NOT inject the contract when autoContinue is 0', async () => {
+      const assistant = makeMockAssistant('ok');
+      const adapter = makeMockAdapter();
+      await handleMessage(makeDmMsg(), makeConfig({ autoContinue: 0 }), assistant, adapter, 'slack', false, dir);
+      expect(assistant.lastPrompt).not.toContain(TURN_END_CONTRACT);
+    });
+  });
+
+  // ── Relay behaviour ──
+
+  describe('relay rounds', () => {
+    it('re-invokes the assistant when the reply ends with [CONTINUE]', async () => {
+      const assistant = makeScriptedAssistant(['did step 1\n[CONTINUE]', 'all done']);
+      const adapter = makeMockAdapter();
+      await handleMessage(makeDmMsg({ text: 'do the task' }), makeConfig(), assistant, adapter, 'slack', false, dir);
+
+      expect(assistant.callCount).toBe(2);
+      expect(assistant.prompts[1]).toBe(AUTO_CONTINUE_PROMPT);
+      // Both rounds use the same session key
+      expect(assistant.lastSessionKey).toBe('slack:C001:U001');
+      // Both replies delivered, sentinel never leaked
+      const allText = adapter.replies.map((r) => r.text).join('\n');
+      expect(allText).toContain('did step 1');
+      expect(allText).toContain('all done');
+      expect(allText).not.toContain('[CONTINUE]');
+    });
+
+    it('uses default cap of 5 relay rounds when agent never stops', async () => {
+      const assistant = makeScriptedAssistant(['still working\n[CONTINUE]']);
+      const adapter = makeMockAdapter();
+      await handleMessage(makeDmMsg(), makeConfig(), assistant, adapter, 'slack', false, dir);
+      // 1 initial + 5 relays
+      expect(assistant.callCount).toBe(6);
+    });
+
+    it('respects a custom autoContinue cap', async () => {
+      const assistant = makeScriptedAssistant(['still working\n[CONTINUE]']);
+      const adapter = makeMockAdapter();
+      await handleMessage(makeDmMsg(), makeConfig({ autoContinue: 2 }), assistant, adapter, 'slack', false, dir);
+      // 1 initial + 2 relays
+      expect(assistant.callCount).toBe(3);
+    });
+
+    it('does NOT relay when autoContinue is 0, but still strips the sentinel', async () => {
+      const assistant = makeScriptedAssistant(['done-ish\n[CONTINUE]']);
+      const adapter = makeMockAdapter();
+      await handleMessage(makeDmMsg(), makeConfig({ autoContinue: 0 }), assistant, adapter, 'slack', false, dir);
+      expect(assistant.callCount).toBe(1);
+      expect(adapter.replies.map((r) => r.text).join('\n')).not.toContain('[CONTINUE]');
+    });
+
+    it('does NOT relay when the reply has no sentinel', async () => {
+      const assistant = makeScriptedAssistant(['plain reply']);
+      const adapter = makeMockAdapter();
+      await handleMessage(makeDmMsg(), makeConfig(), assistant, adapter, 'slack', false, dir);
+      expect(assistant.callCount).toBe(1);
+    });
+
+    it('a sentinel-only reply relays without sending an empty IM message', async () => {
+      const assistant = makeScriptedAssistant(['[CONTINUE]', 'finished now']);
+      const adapter = makeMockAdapter();
+      await handleMessage(makeDmMsg(), makeConfig(), assistant, adapter, 'slack', false, dir);
+      expect(assistant.callCount).toBe(2);
+      expect(adapter.replies).toHaveLength(1);
+      expect(adapter.replies[0].text).toBe('finished now');
+    });
+
+    it('does NOT relay after an engine error event', async () => {
+      const obj: MockAssistant = {
+        ...mockAssistantStubs,
+        callCount: 0,
+        lastSessionKey: undefined,
+        lastPrompt: undefined,
+        async *chat(message: string, opts: { sessionKey?: string } = {}) {
+          obj.callCount++;
+          obj.lastPrompt = message;
+          obj.lastSessionKey = opts.sessionKey;
+          yield { type: 'text' as const, content: 'partial work\n[CONTINUE]' };
+          yield { type: 'error' as const, message: 'engine blew up' };
+        },
+      };
+      const adapter = makeMockAdapter();
+      await handleMessage(makeDmMsg(), makeConfig(), obj, adapter, 'slack', false, dir);
+      expect(obj.callCount).toBe(1);
+    });
+
+    it('is interrupted when a newer message arrives for the same session', async () => {
+      let releaseFirst: () => void = () => {};
+      const gate = new Promise<void>((r) => {
+        releaseFirst = r;
+      });
+      const obj: MockAssistant & { prompts: string[] } = {
+        ...mockAssistantStubs,
+        callCount: 0,
+        prompts: [],
+        lastSessionKey: undefined,
+        lastPrompt: undefined,
+        async *chat(message: string, opts: { sessionKey?: string } = {}) {
+          const idx = obj.callCount++;
+          obj.prompts.push(message);
+          obj.lastSessionKey = opts.sessionKey;
+          if (idx === 0) {
+            await gate; // first call blocks until the second message has arrived
+            yield { type: 'text' as const, content: 'long task part 1\n[CONTINUE]' };
+          } else {
+            yield { type: 'text' as const, content: 'quick reply' };
+          }
+          yield { type: 'done' as const, sessionId: 'mock-sid' };
+        },
+      };
+      const adapter = makeMockAdapter();
+
+      const first = handleMessage(makeDmMsg({ text: 'long task' }), makeConfig(), obj, adapter, 'slack', false, dir);
+      // Second message for the same session arrives while the first is still running
+      await handleMessage(makeDmMsg({ text: 'actually, stop' }), makeConfig(), obj, adapter, 'slack', false, dir);
+      releaseFirst();
+      await first;
+
+      // No auto-continue round was issued for the first message
+      expect(obj.prompts).toHaveLength(2);
+      expect(obj.prompts.some((p) => p === AUTO_CONTINUE_PROMPT)).toBe(false);
+    });
+  });
+
+  // ── Streaming mode ──
+
+  describe('streaming mode sentinel handling', () => {
+    it('strips the trailing sentinel from streamed output', async () => {
+      const config = makeConfig({ streaming: { mode: 'streaming' } } as any);
+      const assistant = makeScriptedAssistant(['part one\n\nstill going\n[CONTINUE]', 'all done']);
+      const adapter = makeMockAdapter();
+      await handleMessage(makeDmMsg(), config, assistant, adapter, 'slack', false, dir);
+
+      expect(assistant.callCount).toBe(2);
+      const allText = adapter.replies.map((r) => r.text).join('\n');
+      expect(allText).toContain('part one');
+      expect(allText).toContain('still going');
+      expect(allText).toContain('all done');
+      expect(allText).not.toContain('[CONTINUE]');
+    });
+
+    it('buffered mode also strips the sentinel and relays', async () => {
+      const config = makeConfig({ streaming: { mode: 'buffered' } } as any);
+      const assistant = makeScriptedAssistant(['step 1 done\n[CONTINUE]', 'finished']);
+      const adapter = makeMockAdapter();
+      await handleMessage(makeDmMsg(), config, assistant, adapter, 'slack', false, dir);
+
+      expect(assistant.callCount).toBe(2);
+      const allText = adapter.replies.map((r) => r.text).join('\n');
+      expect(allText).toContain('step 1 done');
+      expect(allText).toContain('finished');
+      expect(allText).not.toContain('[CONTINUE]');
+    });
+  });
+
+  // ── Group chat integration ──
+
+  describe('group chat relay', () => {
+    it('relays in group chats and records each round in history + turn counter', async () => {
+      const assistant = makeScriptedAssistant(['working on it\n[CONTINUE]', 'task complete']);
+      const adapter = makeMockAdapter();
+      const msg = makeGroupMsg({ text: '@golem do the thing' });
+      await handleMessage(msg, makeConfig(), assistant, adapter, 'slack', false, dir);
+
+      expect(assistant.callCount).toBe(2);
+      const hist = groupHistories.get('slack:C123') ?? [];
+      const botEntries = hist.filter((h) => h.isBot);
+      expect(botEntries.map((h) => h.text)).toEqual(['working on it', 'task complete']);
+      expect(groupTurnCounters.get('slack:C123')).toBe(2);
     });
   });
 });

@@ -94,6 +94,49 @@ function buildErrorNotice(errorMessage: string, timeoutSeconds: number): { reply
   };
 }
 
+// ── Auto-continue relay (issue #37) ─────────────────────────────────────────
+// LLMs routinely end their turn with a verbal promise to keep working ("I'll
+// continue") — but a turn ending means the engine process exits and nothing
+// keeps running. The [CONTINUE] sentinel makes that intent machine-readable:
+// the agent ends its reply with a trailing [CONTINUE] line and the gateway
+// mechanically re-invokes it (same pattern as the [PASS]/[SKIP] sentinels —
+// pure string matching, no intelligence in the gateway).
+
+/** Sentinel an agent appends as its own trailing line to signal unfinished work. */
+export const CONTINUE_SENTINEL = '[CONTINUE]';
+
+/** Default max auto-continue relay rounds per inbound message. */
+export const DEFAULT_AUTO_CONTINUE_ROUNDS = 5;
+
+/** Turn-end contract injected into prompts when auto-continue is enabled. */
+export const TURN_END_CONTRACT =
+  '[System: When your reply ends, execution stops completely — nothing keeps running in the background. ' +
+  'Never say you will keep working and then end your reply. ' +
+  `If the task is not finished and you intend to keep going, end your reply with a single line containing exactly: ${CONTINUE_SENTINEL} ` +
+  'and you will be re-invoked automatically to continue.]';
+
+/** Prompt sent for each mechanical auto-continue round. */
+export const AUTO_CONTINUE_PROMPT =
+  `[System: Auto-continue. Your previous reply ended with ${CONTINUE_SENTINEL}. Continue working on the task. ` +
+  `End with ${CONTINUE_SENTINEL} again if it is still unfinished.]`;
+
+const TRAILING_CONTINUE_RE = /(?:^|\n)\s*\[CONTINUE\]\s*$/;
+
+/** Split a trailing [CONTINUE] sentinel line off a reply. */
+export function splitTrailingContinue(text: string): { body: string; hasContinue: boolean } {
+  if (!TRAILING_CONTINUE_RE.test(text)) return { body: text, hasContinue: false };
+  return { body: text.replace(TRAILING_CONTINUE_RE, '').trimEnd(), hasContinue: true };
+}
+
+/** Monotonic inbound counter per session key — a newer message interrupts pending auto-continue relays. */
+const sessionInboundSeq = new Map<string, number>();
+
+function bumpInboundSeq(key: string): number {
+  const next = (sessionInboundSeq.get(key) ?? 0) + 1;
+  sessionInboundSeq.set(key, next);
+  return next;
+}
+
 interface GatewayOpts {
   dir?: string;
   port?: number;
@@ -187,8 +230,14 @@ export function buildGroupPrompt(
   othersAddressed?: string[],
   /** Other GolemBot instances discovered via fleet, for multi-bot coordination. */
   peers?: PeerBot[],
+  /** When true, inject the turn-end contract so the agent signals unfinished work with [CONTINUE]. */
+  injectContinue = false,
 ): string {
   const parts: string[] = [];
+
+  if (injectContinue) {
+    parts.push(TURN_END_CONTRACT);
+  }
 
   if (injectPass) {
     const base =
@@ -369,6 +418,8 @@ export async function handleMessage(
   const parsed = parseCommand(userText);
   if (parsed) {
     const sessionKey = msg.chatType === 'group' ? buildConversationKey(msg) : buildSessionKey(msg);
+    // Any user activity (e.g. /stop, /reset) interrupts a pending auto-continue relay
+    bumpInboundSeq(sessionKey);
     const cmdCtx: CommandContext = {
       dir,
       sessionKey,
@@ -392,6 +443,8 @@ export async function handleMessage(
   }
 
   const senderLabel = msg.senderName || msg.senderId;
+  const autoContinueMax = config.autoContinue ?? DEFAULT_AUTO_CONTINUE_ROUNDS;
+  const relayEnabled = autoContinueMax > 0;
   let sessionKey: string;
   let fullText: string;
   let injectPass = false;
@@ -453,11 +506,19 @@ export async function handleMessage(
       dir,
       othersAddressed,
       peers,
+      relayEnabled,
     );
   } else {
     sessionKey = buildSessionKey(msg);
-    fullText = `[System: This is a private 1-on-1 conversation with ${senderLabel}.]\n${msg.text}`;
+    const dmParts = [`[System: This is a private 1-on-1 conversation with ${senderLabel}.]`];
+    if (relayEnabled) dmParts.push(TURN_END_CONTRACT);
+    dmParts.push(msg.text);
+    fullText = dmParts.join('\n');
   }
+
+  // Record this inbound message — a newer one arriving for the same session
+  // interrupts any auto-continue relay still pending from this invocation.
+  const inboundSeq = bumpInboundSeq(sessionKey);
 
   log(verbose, `[${channelType}] received from ${senderLabel}: "${userText}" → session ${sessionKey}`);
   // Send typing indicator immediately, then refresh every 4s while waiting for AI.
@@ -547,7 +608,12 @@ export async function handleMessage(
   }
 
   // Helper: send a text chunk to the IM channel (handles splitMessage + mentions).
-  const sendChunk = async (text: string): Promise<void> => {
+  const sendChunk = async (rawText: string): Promise<void> => {
+    // Safety net: never leak the [CONTINUE] auto-continue sentinel to IM
+    const { body: text, hasContinue } = splitTrailingContinue(rawText);
+    if (hasContinue) {
+      log(verbose, `[${channelType}] sendChunk stripped trailing ${CONTINUE_SENTINEL} sentinel`);
+    }
     if (!text.trim()) return;
     hasVisibleStatus = true;
     cancelThinkingStatus();
@@ -600,14 +666,30 @@ export async function handleMessage(
     }
   };
 
-  try {
+  const timeoutSeconds = config.timeout ?? DEFAULT_TIMEOUT_SECONDS;
+  // When injectPass is active (smart mode, not mentioned), force buffered behavior
+  // to prevent [PASS] sentinel from leaking to IM before we can detect and suppress it.
+  const effectiveMode = injectPass ? 'buffered' : streamingConfig.mode;
+
+  interface RoundResult {
+    /** Reply text with any trailing [CONTINUE] sentinel stripped. */
+    fullReply: string;
+    hasError: boolean;
+    /** Agent chose to stay silent ([PASS]/[SKIP]) — caller must stop processing. */
+    silent: boolean;
+    /** Reply ended with the [CONTINUE] sentinel — agent intends to keep working. */
+    sawContinue: boolean;
+  }
+
+  // Run one agent invocation and deliver its output to IM.
+  // `mayRelay` signals that a [CONTINUE]-triggered follow-up round is still possible;
+  // in that case the status message is left open instead of being finalized.
+  const runOneRound = async (promptText: string, mayRelay: boolean): Promise<RoundResult> => {
     let fullReply = '';
     let hasError = false;
     let lastErrorMessage = '';
-    const timeoutSeconds = config.timeout ?? DEFAULT_TIMEOUT_SECONDS;
-    // When injectPass is active (smart mode, not mentioned), force buffered behavior
-    // to prevent [PASS] sentinel from leaking to IM before we can detect and suppress it.
-    const effectiveMode = injectPass ? 'buffered' : streamingConfig.mode;
+    // Attachments are only delivered with the original user message, not relay rounds
+    const chatOpts = promptText === fullText ? { sessionKey, images: msg.images, files: msg.files } : { sessionKey };
 
     if (effectiveMode === 'streaming') {
       // ── Streaming mode: send text at logical boundaries ──
@@ -628,7 +710,7 @@ export async function handleMessage(
         buffer = '';
       };
 
-      for await (const event of assistant.chat(fullText, { sessionKey, images: msg.images, files: msg.files })) {
+      for await (const event of assistant.chat(promptText, chatOpts)) {
         debugEventLog(debugEventsEnabled, `[event-debug] gateway ${summarizeStreamEvent(event)}`);
         if (event.type === 'text') {
           fullReply += event.content;
@@ -700,7 +782,7 @@ export async function handleMessage(
         }
       }
 
-      // Flush remaining buffer
+      // Flush remaining buffer (sendChunk strips a trailing [CONTINUE] sentinel)
       await flush('done');
       console.log(`[stream-debug] finished: ${chunkIdx} chunk(s) sent, fullReply=${fullReply.length} chars`);
 
@@ -711,7 +793,7 @@ export async function handleMessage(
       if (trimmed === '[PASS]' || trimmed === '[SKIP]') {
         log(verbose, `[${channelType}] ${trimmed} — bot chose not to respond`);
         trackMetrics({ passed: true, responsePreview: '' });
-        return;
+        return { fullReply: '', hasError, silent: true, sawContinue: false };
       }
 
       if (!trimmed && hasError) {
@@ -728,14 +810,19 @@ export async function handleMessage(
         finalStatusText = '⚠️ Failed';
       }
 
+      const { body, hasContinue } = splitTrailingContinue(fullReply);
+      const willRelay = hasContinue && mayRelay && !hasError;
       if (fullReply.trim()) {
-        await finalizeStatusUpdate(finalStatusText ?? '✅ Done');
+        if (!willRelay) await finalizeStatusUpdate(finalStatusText ?? '✅ Done');
         log(verbose, `[${channelType}] replied to ${senderLabel}: "${fullReply.trim().slice(0, 80)}..." (streaming)`);
-        trackMetrics({ responsePreview: fullReply.trim().slice(0, 120) });
+        trackMetrics({ responsePreview: body.trim().slice(0, 120) });
       }
-    } else {
-      // ── Buffered mode (default): accumulate all text, send at end ──
-      for await (const event of assistant.chat(fullText, { sessionKey, images: msg.images, files: msg.files })) {
+      return { fullReply: body, hasError, silent: false, sawContinue: hasContinue };
+    }
+
+    // ── Buffered mode (default): accumulate all text, send at end ──
+    {
+      for await (const event of assistant.chat(promptText, chatOpts)) {
         debugEventLog(debugEventsEnabled, `[event-debug] gateway ${summarizeStreamEvent(event)}`);
         if (event.type === 'text') {
           fullReply += event.content;
@@ -776,13 +863,15 @@ export async function handleMessage(
       if (trimmedBuf === '[PASS]' || trimmedBuf === '[SKIP]') {
         log(verbose, `[${channelType}] ${trimmedBuf} — bot chose not to respond`);
         trackMetrics({ passed: true, responsePreview: '' });
-        return;
+        return { fullReply: '', hasError, silent: true, sawContinue: false };
       }
 
       if (!fullReply.trim() && hasError) {
         fullReply = 'Sorry, an error occurred while processing your message. Please try again later.';
       }
 
+      const { body, hasContinue } = splitTrailingContinue(fullReply);
+      const willRelay = hasContinue && mayRelay && !hasError;
       if (fullReply.trim()) {
         await sendChunk(fullReply);
         let finalStatusText: string | undefined;
@@ -796,21 +885,55 @@ export async function handleMessage(
         } else if (hasError) {
           finalStatusText = '⚠️ Failed';
         }
-        await finalizeStatusUpdate(finalStatusText ?? '✅ Done');
+        if (!willRelay) await finalizeStatusUpdate(finalStatusText ?? '✅ Done');
         log(verbose, `[${channelType}] replied to ${senderLabel}: "${fullReply.trim().slice(0, 80)}..."`);
-        trackMetrics({ responsePreview: fullReply.trim().slice(0, 120) });
+        trackMetrics({ responsePreview: body.trim().slice(0, 120) });
       }
+      return { fullReply: body, hasError, silent: false, sawContinue: hasContinue };
     }
+  };
 
-    // Update group history with the full reply + increment turn counter
-    if (fullReply.trim() && msg.chatType === 'group') {
-      const groupKey = buildConversationKey(msg);
-      const gc = resolveGroupChatConfig(config);
-      const hist = groupHistories.get(groupKey) ?? [];
-      hist.push({ senderName: config.name, text: fullReply.trim(), isBot: true });
-      if (hist.length > gc.historyLimit) hist.shift();
-      groupHistories.set(groupKey, hist);
-      groupTurnCounters.set(groupKey, (groupTurnCounters.get(groupKey) ?? 0) + 1);
+  try {
+    // ── Auto-continue relay loop (issue #37) ──
+    // The agent signals unfinished work with a trailing [CONTINUE] line; the
+    // gateway mechanically re-invokes it, up to `autoContinue` extra rounds.
+    let promptText = fullText;
+    let relayRound = 0;
+    while (true) {
+      const mayRelay = relayEnabled && relayRound < autoContinueMax;
+      const round = await runOneRound(promptText, mayRelay);
+      if (round.silent) return;
+
+      // Update group history with this round's reply + increment turn counter
+      if (round.fullReply.trim() && msg.chatType === 'group') {
+        const groupKey = buildConversationKey(msg);
+        const gc = resolveGroupChatConfig(config);
+        const hist = groupHistories.get(groupKey) ?? [];
+        hist.push({ senderName: config.name, text: round.fullReply.trim(), isBot: true });
+        if (hist.length > gc.historyLimit) hist.shift();
+        groupHistories.set(groupKey, hist);
+        groupTurnCounters.set(groupKey, (groupTurnCounters.get(groupKey) ?? 0) + 1);
+      }
+
+      if (!round.sawContinue || round.hasError || !mayRelay) {
+        if (round.sawContinue && !round.hasError && !mayRelay && relayEnabled) {
+          log(verbose, `[${channelType}] auto-continue cap (${autoContinueMax}) reached for session ${sessionKey}`);
+        }
+        break;
+      }
+      if (sessionInboundSeq.get(sessionKey) !== inboundSeq) {
+        log(verbose, `[${channelType}] auto-continue interrupted by a newer message for session ${sessionKey}`);
+        break;
+      }
+
+      relayRound++;
+      log(verbose, `[${channelType}] auto-continue round ${relayRound}/${autoContinueMax} for session ${sessionKey}`);
+      // Keep the typing indicator alive across relay rounds
+      if (adapter.typing && typingTimer === undefined) {
+        adapter.typing(msg).catch(() => {});
+        typingTimer = setInterval(() => adapter.typing!(msg).catch(() => {}), 4000);
+      }
+      promptText = AUTO_CONTINUE_PROMPT;
     }
   } catch (e) {
     console.error(`[${channelType}] Failed to process message:`, e);

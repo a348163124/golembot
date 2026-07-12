@@ -174,6 +174,7 @@ channels:
     appId: ${FEISHU_APP_ID}
     appSecret: ${FEISHU_APP_SECRET}
     # domain: lark                 # optional — Lark global tenants
+    # pingTimeout: 30              # optional — WebSocket pong timeout in seconds
   # Custom adapter — local file or npm package
   my-email:
     _adapter: ./adapters/email-adapter.js

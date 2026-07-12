@@ -70,6 +70,8 @@ export async function loadConfig(dir) {
     }
     if (typeof doc.timeout === 'number')
         config.timeout = doc.timeout;
+    if (typeof doc.autoContinue === 'number')
+        config.autoContinue = doc.autoContinue;
     if (typeof doc.maxConcurrent === 'number')
         config.maxConcurrent = doc.maxConcurrent;
     if (typeof doc.maxQueuePerSession === 'number')
@@ -194,6 +196,8 @@ export async function writeConfig(dir, config) {
         content.gateway = config.gateway;
     if (typeof config.timeout === 'number')
         content.timeout = config.timeout;
+    if (typeof config.autoContinue === 'number')
+        content.autoContinue = config.autoContinue;
     if (typeof config.maxConcurrent === 'number')
         content.maxConcurrent = config.maxConcurrent;
     if (typeof config.maxQueuePerSession === 'number')
